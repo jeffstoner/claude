@@ -3,7 +3,8 @@
 #
 # Verifies that every symbol an issue CLAIMS to have added actually exists in the
 # repository. Answers exactly one question -- "did this work land at all?" -- the
-# failure mode that cost three beads on 2026-08-24. It does NOT check correctness
+# failure mode where a closed issue describes code that is not there. It does NOT
+# check correctness
 # (that is the audit agent's job) and it does NOT check authorship: a symbol that
 # was already present passes.
 #

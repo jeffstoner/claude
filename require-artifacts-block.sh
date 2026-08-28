@@ -35,7 +35,7 @@ ${FENCE}
 path is repo-relative; symbols defaults to [] (asserts the file exists); state
 defaults to "present" ("removed" asserts deletion). This is what makes the
 session-close integrity check possible -- a prose-only close-reason cannot be
-verified, which is how three implementations went missing on 2026-08-24. Tip: use
+verified, which is how work silently goes missing. Tip: use
 'bd close <id> --reason-file <path>' so you never have to shell-escape the JSON."
 
 # --reason-file/- defers the text to a file or stdin; allow it and let the

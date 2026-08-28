@@ -21,9 +21,9 @@ printf '%s' "$cmd" | grep -qE '(^|[;&|(){}[:space:]])git([[:space:]]|$)' || exit
 # over-inclusive: over-blocking is recoverable, destroying a peer's work is not.
 uses() { printf '%s' "$cmd" | grep -qwE "$1"; }
 
-# 1. stash — the mechanism that destroyed three implementations on 2026-08-24.
+# 1. stash — a whole-tree operation, and the classic way one agent erases another's work.
 if uses 'stash'; then
-  deny "BLOCKED: 'git stash' is banned in a shared checkout — it is a whole-tree operation that silently sweeps up every concurrent agent's uncommitted work. To answer 'is this failure pre-existing?' use the read-only baseline worktree or 'git show HEAD:<path>'. To shelve work, commit it to a branch."
+  deny "BLOCKED: 'git stash' is banned in a shared checkout — it is a whole-tree operation that silently captures every concurrent agent's uncommitted work, and an incomplete restore destroys it with no error. To answer 'is this failure pre-existing?' use the read-only baseline worktree or 'git show HEAD:<path>'. To shelve work, commit it to a branch."
 fi
 
 # 2. Discarding working-tree changes.

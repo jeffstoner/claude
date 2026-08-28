@@ -1,5 +1,21 @@
 # Coding Flow
 
+## Before you touch the codebase
+
+**ALWAYS** review the project's learnings before doing any work in a codebase — not only when you
+hit an error. Past agents record environment quirks, tool-version mismatches, non-obvious root
+causes and silent failure modes there, and the cost of reading them is seconds against hours of
+rediscovery. Search for terms relevant to the task (`grep -ril "<keyword>" learnings/`) and for the
+subsystem you are about to change. See `~/.claude/CLAUDE-LEARNINGS.md` for the protocol, the entry
+format, and the rules for amending an existing entry.
+
+Consult learnings again, specifically, when: a test or build fails in a way you did not expect;
+you are about to choose between two plausible technical approaches; or you are working in a
+subsystem you have not touched before. Write a new entry once your work is green and you hit
+something a future agent would otherwise waste real time rediscovering.
+
+## Test Driven Development
+
 Use Test Driven Development when coding.
 - Every coding task must have at least 1 test.
 - A coding agent **MUST NEVER** write tests. Tests **MUST** be written by a separate agent.
@@ -16,23 +32,44 @@ Use Test Driven Development when coding.
   issue tracker **OR** update an existing issue with sufficient context and direction to finish 
   the work.
 
+## Closing a task: the audit gates the close
+
+An issue is **not** closed by the agent that did the work until an audit has passed. The sequence:
+
+1. The coding agent finishes and **MUST** update the issue with a description of the work for human
+   review, including the JSON fenced-block detailing the files and symbols involved (schema below).
+   Write it to the issue's **notes**, using the tracker's *append* form — never the replace form.
+2. The coding agent stops. It does **not** close the issue.
+3. The orchestrator dispatches an auditing agent.
+4. Audit clean → close the issue. Audit finds problems → resume the original coding agent with the
+   findings so it can fix them with its context intact, then re-audit.
+5. Anything not fixed now is communicated to the user, who decides: fix it now, or open a new issue
+   carrying the detail so it can be fixed later.
+
+**How the resume works, because it is not obvious.** A subagent terminates when it finishes; there is
+no pause primitive and a subagent cannot block waiting on a sibling. Terminating is not destruction:
+sending a message to a stopped agent resumes it **with its context intact**, whereas dispatching a
+fresh agent starts with no memory of the work. So the agent that wrote the code is the one that
+should fix audit findings — it knows why it made each choice. If resume is unavailable, dispatch a
+fresh agent with the audit findings instead; the sequence is unchanged, only slower.
+
+**One duplication to expect.** The artifacts block goes into the issue's notes at step 1 so the
+auditor has it, and again in the close reason at step 4 so the close-time gate accepts the close.
+Use the tracker's read-reason-from-file option to avoid shell-escaping the JSON.
+
 When working with code:
-* Before closing a task, the agent **MUST** update its ticket with a description of the work
-  it performed for human review. The update **MUST** include a JSON fenced-block that details 
-  the files and symbols involved in the work. See below for the schema and description.
-* After closing a coding task, the orchestrator **MUST** dispatch an auditing agent to audit 
-  the task. The auditing agent should validate the work performed against the task's 
-  description, what the corresponding tests verify, and what the code actually does. Missing,
-  incomplete, or incorrect code/tests need to be communicated to the user. Ask the user if
-  they should be fixed or a new bead created with the details so it can be fixed at a later time.
+* The auditing agent validates the work performed against the issue's description, what the
+  corresponding tests verify, and what the code actually does.
 * An audit validates against **the code**, never against the implementer's own account. Where
   the close-reason and the code disagree, the code wins and the close-reason gets corrected —
   including when the implementer *understated* what it delivered.
 * When a task's own premise turns out to be false — the bug describes code that does not exist,
   the test it cites already passes — **stop and correct the premise** before doing the work.
   Silently doing something adjacent is how phantom issues propagate into other issues.
-* At session close, run an integrity check over everything closed this session: for each issue,
-  grep for the symbols its close-reason names. Report anything missing.
+* At session close, an integrity check runs over everything closed this session: for each issue,
+  every symbol its close-reason claims is checked against the repository. This is automated by the
+  `SessionEnd` hook (see `~/.claude/README.md`). Where those hooks are not installed, run the
+  equivalent by hand — grep for the symbols each close-reason names — and report anything missing.
 
 ## close-reason's JSON block
 

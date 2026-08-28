@@ -10,8 +10,8 @@ Before dispatching multiple subagents whose work will compose or interact — on
 3. When it's a judgment call without a clearly correct answer (a priority or product tradeoff, not a technical fact), surface it to the user rather than deciding silently.
 4. Record the resolution in the channel already scoped to match its actual reach — don't invent a new one:
    - **Concerns only one task** — write it into that task's own record (a ticket's description/design field, a linked doc, a comment) — wherever that subagent's normal onboarding step already looks.
-   - **A pattern likely to recur on future tasks of the same kind** (a framework gotcha, a testing anti-pattern, a non-obvious technical constraint) — write it to the project's durable lessons file so it surfaces the next time a relevant task starts, not just this time. See `CLAUDE-LEARNINGS.md` for details.
-   - **A convention or architectural stance the project should follow going forward**, beyond any single task — write it to CLAUDE.md or the project's decision-record convention (an ADR, a design doc) if one exists.
+   - **A pattern likely to recur on future tasks of the same kind** (a framework gotcha, a testing anti-pattern, a non-obvious technical constraint) — write it to the project's durable lessons file so it surfaces the next time a relevant task starts, not just this time. See `~/.claude/CLAUDE-LEARNINGS.md` for details.
+   - **A convention or architectural stance the project should follow going forward**, beyond any single task — write it to `~/.claude/CLAUDE.md` or the project's decision-record convention (an ADR, a design doc) if one exists.
 5. Reference the resolution explicitly in each dependent task's dispatch prompt, and add an execution-order dependency (if the tracker supports one) when the coupling means one task's artifact must exist before another can be built or tested against it.
 
 ## Multi-Agent Isolation
@@ -24,8 +24,8 @@ stash, checkout or `reset --hard` in one cannot reach another.
   back and `git worktree remove` it.
 * **A worktree does not need its own virtualenv or `node_modules`** — the usual reason to avoid
   them. Two ways to solve it:
-  1. `worktree.symlinkDirectories` in `settings.json` (see `# Hooks`). Symlinks the named
-     directories from the main repo into each worktree.
+  1. `worktree.symlinkDirectories` in `settings.json` (see `~/.claude/README.md`). Symlinks the
+     named directories from the main repo into each worktree.
   2. Invoke the main checkout's interpreter by absolute path with the worktree as CWD. For a
      `src`-layout Python project with `pythonpath = ["src"]` and no editable install, the venv
      holds only third-party dependencies, so imports resolve to the **worktree's** `src`.
@@ -43,7 +43,10 @@ replacement for `git stash`: to check whether a failure is pre-existing, run the
   coordination overhead and shared-resource contention cost more than the wall-clock saved.
 * The orchestrator **assigns file ownership explicitly** in each dispatch prompt, and states
   which paths belong to other agents.
-* The orchestrator **dispatches the audit agent** after a coding task completes.
+* The orchestrator **dispatches the audit agent** once a coding task's work is complete and its
+  artifacts block is recorded — before the issue is closed. If the audit finds problems, resume the
+  original coding agent with the findings rather than dispatching a fresh one: a resumed agent keeps
+  its context and knows why it made each choice. See `~/.claude/CLAUDE-CODE-FLOW.md`.
 * Tell each agent **not to run the full test suite** while others are mid-edit — it will observe
   half-finished work and report phantom regressions. The orchestrator runs the full suite once
   the tree is quiet. (With per-agent worktrees this restriction disappears, which is most of the

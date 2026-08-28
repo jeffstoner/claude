@@ -18,13 +18,16 @@ Observe good git hygiene:
 
 ## Commit Messages
 
-Read and foillow the rules in `CLAUDE-CONVENTIONAL-COMMITS.md`.
+Read and follow the rules in `~/.claude/CLAUDE-CONVENTIONAL-COMMITS.md`.
 
 **Commit early — uncommitted work is unprotected work.**
 
 * Commit each task's work to a branch **as soon as its quality gates pass**. Do not accumulate
   multiple tasks', or multiple agents', changes in a dirty working tree. Committed work is
   effectively unloseable; uncommitted work is one bad command away from gone.
+* Committing per task is also what makes the session-close integrity check correct: it verifies an
+  issue's claimed artifacts against committed history, so work still sitting uncommitted reads as
+  missing. See `~/.claude/README.md`.
 * The user controls what gets **merged**, not what gets **committed**. Commit to a task branch 
   freely; never merge to `main` without approval.
 

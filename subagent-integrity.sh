@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ~/.claude/hooks/subagent-integrity.sh  start|stop
 #
-# Early warning for the failure that cost three beads on 2026-08-24: a subagent
-# reports success while having changed nothing in the repository.
+# Early warning for a specific failure: a subagent reports success while having
+# changed nothing in the repository.
 #
 #   SubagentStart -> snapshot (HEAD sha + hash of `git status --porcelain`)
 #   SubagentStop  -> re-snapshot; if identical, emit a systemMessage carrying the
@@ -89,7 +89,7 @@ case "$mode" in
 Its final message began: \""
         + $last
         + "\"
-If that was a read-only agent (audit, review, forensics) this is expected. If it claims to have done work, VERIFY BEFORE TRUSTING IT: grep for the symbols its report names. This is the signature of the 2026-08-24 loss, where three closed issues described code that was never in the repo."),
+If that was a read-only agent (audit, review, forensics) this is expected. If it claims to have done work, VERIFY BEFORE TRUSTING IT: grep for the symbols its report names. An agent that reports work it did not do is the signature of work lost to a bad tree operation, or of a report that was never grounded in the code."),
       suppressOutput: true
     }'
     exit 0
