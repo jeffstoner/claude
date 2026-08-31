@@ -44,12 +44,22 @@ to Claude, it doesn't have to follow this pattern. You can use a more human-in-t
 approach. You can define the scope of work, you can write the beads, you can write the tests,
 you can implement the code, you can do the auditing - you can hand off any one or more pieces
 to Claude - **but** you need to use beads for anything Claude needs. This is central to the 
-workflow since it is how dependencies are defined, how work the work is specified, how the 
+workflow since it is how dependencies are defined, how the work is specified, how the 
 completed work is recorded, and how it can be audited.
+
+**Note** - you can use the `CLAUDE.md` in your repo's root directory to override/superceed 
+parts of the workflow. In particular, the following rules help establish a safety barrier
+but you can override them if desired by telling Claude they are permitted:
+
+* **NEVER** merge to the `main` branch without user approval.
+* **NEVER** use '--force', especially if git returns an error. Git errors should be investigated
+  and resolved cleanly. If unsure, escalate to the user.
+* **NEVER** push to or pull from a remote. The user is responsible for syncing with remotes.
+
 
 **Important** - when starting a session with Claude, tell it that it is the Orchestrator. This
 is the key to having it follow the full workflow, from writing beads, to launching subagents,
-to validating results, and learning from itself. Then you session can be as simple as:
+to validating results, and learning from itself. Then your sessions can be as simple as:
 
 ```
 > Act as the Orchestrator. Work beads `gg-12.1` and `gg-13.4`

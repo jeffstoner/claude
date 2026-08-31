@@ -163,9 +163,10 @@ when the session started. Open `/hooks` once to reload, or restart the session.
 
 ## 6. bd-board
 
-Copy the `bd-board` script into a directory on your PATH, such as `~/.local/bin`
+Copy the `bd-board` script into a directory on your PATH, such as `~/.local/bin`. If you are not
+using `beads`, skip this step.
 
-It requires Python3.
+`bd-board` requires Python3.
 
 ## 7. PRIME.md
 
@@ -173,7 +174,12 @@ The `PRIME.md` is an override to Bead's `bd prime` output. This is necessary as 
 output contains instructions that may contradict or confuse Claude. Copy this file to the
 `.beads` directory in your repo.
 
-## 7. Disabling
+Again, if you are not using `beads`, skip this step.
+
+## 8. Disabling
+
+You can selectively disable parts of this workflow if you encounter problems. Follow one or
+more of these steps:
 
 - **Per hook**: remove its entry from `~/.claude/settings.json`.
 - **All hooks**: `"disableAllHooks": true`.
