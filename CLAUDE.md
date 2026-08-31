@@ -91,3 +91,7 @@ When acting as an orchestrator or simply dispatching agents, read and follow the
 Agents **MUST** read `~/.claude/CLAUDE-LEARNINGS.md` before working in a codebase, for rules on
 learning from past agents and teaching future ones about encountered failures.
 
+# Beads
+
+When using `beads` as the project issue tracker, read and follow the rules in
+`~/.claude/CLAUDE-BEADS.md`. When using a different issue tracker, ignore this file.

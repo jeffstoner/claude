@@ -44,12 +44,23 @@ sweep or run by hand.
 
 | Script | Invoked by | When |
 |---|---|---|
+| `bd-board` | not a hook - called manually | - |
 | `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | before every git command |
 | `require-artifacts-block.sh` | `PreToolUse`, `if: Bash(<tracker> close *)` | before every issue close |
 | `subagent-integrity.sh start` | `SubagentStart` | a subagent begins |
 | `subagent-integrity.sh stop` | `SubagentStop` | a subagent ends |
 | `session-close-sweep.sh` | `SessionEnd` | the session ends |
-| `bd-verify-artifacts.sh` | not a hook — called by the sweep, or manually | — |
+| `bd-verify-artifacts.sh` | not a hook - called by the sweep, or manually | - |
+
+### `bd-board`
+
+`bd-board` is a CLI that reports which beads are ready to be worked, separating them into 4 buckets:
+* READY NOW - this bucket of beads are not blocked and can be worked on immediately.
+* IN FLIGHT - this bucket of beads shows which beads are actively being worked (marked as "in_progress").
+* READY NEXT - this bucket of beads shows which could (logically) be worked next. They are often blocked by the beads in "READY NOW".
+* NEEDS REVIEW - this bucket of beads identifies beads that require a human to review and either accept or decline them.
+
+Each bucket groups the beads under their respective epics/milestones for clarity.
 
 ### `guard-git.sh`
 

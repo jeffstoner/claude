@@ -26,6 +26,7 @@ For what these components do and why they are built this way, see `README.md`.
 ~/.claude/CLAUDE-ORCHESTRATOR.md
 ~/.claude/CLAUDE-LEARNINGS.md
 ~/.claude/CLAUDE-CONVENTIONAL-COMMITS.md
+~/.claude/CLAUDE-BEADS.md
 ```
 
 `~/.claude/CLAUDE.md` is the entry point and references the others by absolute-ish path
@@ -158,7 +159,13 @@ consulted) and attempt a close without an artifacts block (it should be denied).
 watcher has not picked up the change — it only watches directories that already had a settings file
 when the session started. Open `/hooks` once to reload, or restart the session.
 
-## 6. Disabling
+## 6. bd-board
+
+Install the `bd-board` script into a directory on your PATH, such as `~/.local/bin`
+
+It requires Python3.
+
+## 7. Disabling
 
 - **Per hook**: remove its entry from `~/.claude/settings.json`.
 - **All hooks**: `"disableAllHooks": true`.

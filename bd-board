@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""
+bd-board — a human-readable board derived from beads. Nothing is stored here;
+every line is computed from `bd list --all --json` on each run, so it cannot go
+stale the way a hand-maintained ordering document does.
+
+Buckets:
+  READY NOW    actionable, unblocked, unclaimed
+  IN FLIGHT    claimed (status=in_progress)
+  READY NEXT   one hop out: every remaining blocker is itself ready now or in flight
+  NEEDS REVIEW beads labelled `human` — decisions only a person can make
+
+Work is grouped by milestone, and by default only ACTIVE milestones (those with
+both closed and open children) are expanded — beads sitting in milestones that
+have not started are counted, not listed, because a flat ready list is dominated
+by work nobody intends to start yet. `--all` expands everything.
+
+Epics and milestones are containers, not work, so they never appear as rows.
+Beads labelled `meta` (e.g. the Implementation Notes bead) are documents, not
+work, so they are excluded too.
+
+Usage:  bd-board [-C DIR] [--all] [--no-color] [--plain]
+"""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+CONTAINER_TYPES = {"epic", "milestone"}
+EXCLUDE_LABELS = {"meta"}
+HUMAN_LABEL = "human"
+BLOCKING_EDGE = "blocks"
+CLOSED = "closed"
+
+
+class C:
+    on = True
+
+    @classmethod
+    def _w(cls, code, s):
+        return f"\033[{code}m{s}\033[0m" if cls.on else s
+
+    @classmethod
+    def bold(cls, s):
+        return cls._w("1", s)
+
+    @classmethod
+    def dim(cls, s):
+        return cls._w("2", s)
+
+    @classmethod
+    def green(cls, s):
+        return cls._w("32", s)
+
+    @classmethod
+    def yellow(cls, s):
+        return cls._w("33", s)
+
+    @classmethod
+    def cyan(cls, s):
+        return cls._w("36", s)
+
+    @classmethod
+    def magenta(cls, s):
+        return cls._w("35", s)
+
+
+def load(cwd):
+    if not shutil.which("bd"):
+        sys.exit("bd-board: `bd` not found on PATH")
+    try:
+        out = subprocess.run(["bd", "list", "--all", "--json"],
+                             cwd=cwd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        sys.exit("bd-board: `bd list` timed out")
+    except FileNotFoundError:
+        sys.exit(f"bd-board: no such directory: {cwd}")
+    if out.returncode != 0:
+        msg = (out.stderr or out.stdout or "").strip().splitlines()
+        sys.exit("bd-board: bd failed: " + (msg[0] if msg else "unknown error"))
+    try:
+        return json.loads(out.stdout)
+    except json.JSONDecodeError:
+        sys.exit("bd-board: could not parse `bd list --all --json` output")
+
+
+def blockers(issue):
+    """Only `blocks` edges gate readiness; parent-child edges are structural."""
+    return [d["depends_on_id"] for d in (issue.get("dependencies") or [])
+            if d.get("type") == BLOCKING_EDGE]
+
+
+def is_work(issue):
+    return (issue.get("issue_type") not in CONTAINER_TYPES
+            and not EXCLUDE_LABELS & set(issue.get("labels") or []))
+
+
+def short(text, width):
+    text = " ".join((text or "").split())
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Human-readable beads board.")
+    ap.add_argument("-C", dest="dir", default=".", help="run in this directory")
+    ap.add_argument("--all", action="store_true",
+                    help="expand every milestone, not just active ones")
+    ap.add_argument("--no-color", action="store_true")
+    ap.add_argument("--plain", action="store_true", help="no color, ascii rules")
+    args = ap.parse_args()
+    C.on = sys.stdout.isatty() and not args.no_color and not args.plain
+
+    issues = load(args.dir)
+    by_id = {i["id"]: i for i in issues}
+
+    # --- milestone resolution: walk the parent chain to the enclosing milestone
+    def milestone_of(issue):
+        seen, cur = set(), issue
+        while cur is not None and cur["id"] not in seen:
+            seen.add(cur["id"])
+            if cur.get("issue_type") == "milestone":
+                return cur["id"]
+            cur = by_id.get(cur.get("parent") or "")
+        return None
+
+    ms_of = {i["id"]: milestone_of(i) for i in issues}
+    milestones = [i for i in issues if i.get("issue_type") == "milestone"]
+
+    progress = {}
+    for m in milestones:
+        kids = [i for i in issues if ms_of.get(i["id"]) == m["id"] and is_work(i)]
+        done = sum(1 for k in kids if k.get("status") == CLOSED)
+        progress[m["id"]] = (done, len(kids))
+
+    def is_active(mid):
+        """Partly done and not parked. P4 is beads' backlog tier, so a P4
+        milestone stays collapsed however many of its children are closed —
+        otherwise a deferred milestone with a couple of tidied-up duplicates
+        masquerades as work in progress."""
+        done, total = progress.get(mid, (0, 0))
+        if by_id.get(mid, {}).get("priority", 9) >= 4:
+            return False
+        return total > 0 and 0 < done < total
+
+    # --- bucketing
+    open_issues = [i for i in issues if i.get("status") != CLOSED]
+
+    def unmet(issue):
+        return [b for b in blockers(issue)
+                if by_id.get(b, {}).get("status") != CLOSED]
+
+    ready_now, in_flight, blocked, human = [], [], [], []
+    for i in open_issues:
+        if HUMAN_LABEL in (i.get("labels") or []):
+            human.append(i)
+            continue
+        if not is_work(i):
+            continue
+        if i.get("status") == "in_progress":
+            in_flight.append(i)
+        elif unmet(i):
+            blocked.append(i)
+        else:
+            ready_now.append(i)
+
+    ready_ids = {i["id"] for i in ready_now} | {i["id"] for i in in_flight}
+    ready_next, waits = [], {}
+    for i in blocked:
+        pending = unmet(i)
+        if all(b in ready_ids for b in pending):   # one hop out
+            ready_next.append(i)
+            waits[i["id"]] = "waits on " + ", ".join(sorted(pending)[:2])
+
+    leverage = {}
+    for i in issues:
+        for b in blockers(i):
+            if i.get("status") != CLOSED:
+                leverage[b] = leverage.get(b, 0) + 1
+
+    # --- rendering
+    term = shutil.get_terminal_size((100, 24)).columns
+    width = max(26, min(term, 100) - 58)
+    rule = ("=" if args.plain else "━") * min(term, 96)
+
+    def row(i, note=None):
+        line = (f"    {C.bold(i['id']):<30} {C.dim('P%s' % i.get('priority', '?'))}  "
+                f"{short(i.get('title'), width)}")
+        tail = []
+        if leverage.get(i["id"]):
+            tail.append(f"unblocks {leverage[i['id']]}")
+        if note:
+            tail.append(note)
+        return line + (C.dim(f"   [{' · '.join(tail)}]") if tail else "")
+
+    def order(seq):
+        return sorted(seq, key=lambda i: (i.get("priority", 9), i["id"]))
+
+    def grouped(title, color, items, notes=None, empty="— none —"):
+        print(color(C.bold(title)))
+        if not items:
+            print(C.dim(f"  {empty}\n"))
+            return
+        buckets = {}
+        for i in items:
+            buckets.setdefault(ms_of.get(i["id"]), []).append(i)
+        shown = hidden = 0
+        for mid in sorted(buckets, key=lambda m: (
+                not is_active(m), by_id.get(m, {}).get("priority", 9), m or "~")):
+            group = buckets[mid]
+            m = by_id.get(mid)
+            if m:
+                done, total = progress.get(mid, (0, 0))
+                label = m["title"].replace("Milestone: ", "")
+                head = f"  {label}  ({done}/{total})"
+                head += "  ← active" if is_active(mid) else ""
+            else:
+                head = "  (no milestone)"
+            if args.all or is_active(mid) or mid is None:
+                print(C.dim(head))
+                for i in order(group):
+                    print(row(i, (notes or {}).get(i["id"])))
+                shown += len(group)
+            else:
+                print(C.dim(f"{head}   … {len(group)} not listed"))
+                hidden += len(group)
+        if hidden and not args.all:
+            print(C.dim(f"\n  {hidden} in milestones not yet started — `bd-board --all` to list"))
+        print()
+
+    print(f"\n{C.bold(rule)}")
+    print(C.bold("  bd board") + C.dim(f"   {os.path.abspath(args.dir)}"))
+    print(f"{C.bold(rule)}\n")
+
+    grouped("READY NOW", C.green, ready_now,
+            empty="— nothing unblocked; see READY NEXT and NEEDS REVIEW —")
+    grouped("IN FLIGHT", C.cyan, in_flight, empty="— no claimed beads —")
+    grouped("READY NEXT  (one hop out)", C.yellow, ready_next, notes=waits,
+            empty="— nothing queued behind current work —")
+
+    print(C.magenta(C.bold("NEEDS REVIEW  (human decision)")))
+    if human:
+        for i in order(human):
+            print(row(i))
+    else:
+        print(C.dim("  — no decisions pending —"))
+    print()
+
+    print(C.dim(f"  {len(ready_now)} ready · {len(in_flight)} in flight · "
+                f"{len(ready_next)} next · {len(human)} awaiting you · "
+                f"{sum(1 for i in issues if i.get('status') == CLOSED)} closed"))
+    print(C.dim("  bd show <id> · bd human list · bd list --label=meta   (notes bead)\n"))
+
+
+if __name__ == "__main__":
+    main()
