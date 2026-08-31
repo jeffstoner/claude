@@ -44,9 +44,15 @@ replacement for `git stash`: to check whether a failure is pre-existing, run the
 * The orchestrator **assigns file ownership explicitly** in each dispatch prompt, and states
   which paths belong to other agents.
 * The orchestrator **dispatches the audit agent** once a coding task's work is complete and its
-  artifacts block is recorded — before the issue is closed. If the audit finds problems, resume the
-  original coding agent with the findings rather than dispatching a fresh one: a resumed agent keeps
-  its context and knows why it made each choice. See `~/.claude/CLAUDE-CODE-FLOW.md`.
+  artifacts block is recorded, and the audit gates everything downstream, in order: **merge, then
+  worktree/branch cleanup, then closing the issue** — none of the three happens until the audit is
+  clean (`~/.claude/CLAUDE-BEADS.md`'s "audited before merge" standing convention; this is the same
+  gate, not a separate one). Concretely: do not merge the coding agent's branch back — not even a
+  risk-free fast-forward — until the audit passes, and do not remove its worktree/branch until
+  *after* that merge. If the audit finds problems, resume the original coding agent with the
+  findings rather than dispatching a fresh one: a resumed agent keeps its context and knows why it
+  made each choice, but only if its worktree still exists to resume it in — which is exactly what
+  auditing before merge/cleanup preserves. See `~/.claude/CLAUDE-CODE-FLOW.md`.
 * Tell each agent **not to run the full test suite** while others are mid-edit — it will observe
   half-finished work and report phantom regressions. The orchestrator runs the full suite once
   the tree is quiet. (With per-agent worktrees this restriction disappears, which is most of the

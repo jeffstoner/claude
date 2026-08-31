@@ -6,8 +6,10 @@ Observe good git hygiene:
   encouraged.
 * Branches should be merged only when all work has been completed and passes an audit.
 * Subagents should use worktrees when their use case fits the situation.
-* Remove worktrees when its changes have been successfully merged back into the main worktree
-  ("clean up after yourself")
+* Remove worktrees once their changes have been merged back into the main worktree AND — for a 
+  coding task with a paired audit — once that audit has passed. A merge (even a risk-free 
+  fast-forward) is not the cleanup signal by itself; see ~/.claude/CLAUDE-ORCHESTRATOR.md's 
+  "Right-size the parallelism" section for why.
 * Don't combine multiple changes into a single commit. Use 1 commit per task/fix/chore/etc..
 * Write brief (no more than 2 paragraphs) but meaningful commit messages.
 * It is better to have many small commits than a few large commits.
