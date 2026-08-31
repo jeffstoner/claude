@@ -40,13 +40,16 @@ An issue is **not** closed by the agent that did the work until an audit has pas
    review, including the JSON fenced-block detailing the files and symbols involved (schema below).
    Write it to the issue's **notes**, using the tracker's *append* form — never the replace form.
 2. The coding agent stops. It does **not** close the issue, and if it worked in its own worktree/
-   branch, that worktree/branch is **not** merged or removed yet either — see
-   `~/.claude/CLAUDE-BEADS.md`'s "audited before merge" standing convention and
-   `~/.claude/CLAUDE-ORCHESTRATOR.md`'s merge/cleanup/close ordering.
+   branch, it does **not** merge or remove that worktree/branch itself — merging is always the
+   orchestrator's action, never the coding agent's own. See `~/.claude/CLAUDE-BEADS.md`'s
+   "audited before merge" standing convention and `~/.claude/CLAUDE-ORCHESTRATOR.md`'s
+   merge/cleanup/close ordering.
 3. The orchestrator dispatches an auditing agent.
-4. Audit clean → merge the branch (if any), remove the worktree, then close the issue. Audit finds
-   problems → resume the original coding agent with the findings so it can fix them with its
-   context intact, then re-audit.
+4. Audit clean → the orchestrator merges the branch (if any). If the merge conflicts, resume the
+   original coding agent with the conflict details so it resolves it with context intact, then
+   re-merge. Once merged cleanly, remove the worktree, then close the issue. Audit finds
+   problems instead → resume the original coding agent with the findings so it can fix them with
+   its context intact, then re-audit.
 5. Anything not fixed now is communicated to the user, who decides: fix it now, or open a new issue
    carrying the detail so it can be fixed later.
 
@@ -54,11 +57,13 @@ An issue is **not** closed by the agent that did the work until an audit has pas
 no pause primitive and a subagent cannot block waiting on a sibling. Terminating is not destruction:
 sending a message to a stopped agent resumes it **with its context intact**, whereas dispatching a
 fresh agent starts with no memory of the work. So the agent that wrote the code is the one that
-should fix audit findings — it knows why it made each choice. If resume is unavailable, dispatch a
-fresh agent with the audit findings instead; the sequence is unchanged, only slower. The most
-common way resume becomes unavailable is self-inflicted: merging and deleting the coding agent's
-worktree/branch as soon as its change lands, before the audit has even run — which is exactly what
-step 2 above forbids.
+should fix audit findings — it knows why it made each choice. The same logic applies to a merge
+conflict discovered at step 4: resume the agent that wrote the change, don't resolve the conflict
+yourself and don't dispatch a fresh agent to re-derive it from scratch. If resume is unavailable,
+dispatch a fresh agent with the findings (audit or conflict) instead; the sequence is unchanged,
+only slower. The most common way resume becomes unavailable is self-inflicted: merging and
+deleting the coding agent's worktree/branch as soon as its change lands, before the audit has even
+run — which is exactly what step 2 above forbids.
 
 **One duplication to expect.** The artifacts block goes into the issue's notes at step 1 so the
 auditor has it, and again in the close reason at step 4 so the close-time gate accepts the close.

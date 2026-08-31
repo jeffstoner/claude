@@ -5,11 +5,18 @@ Observe good git hygiene:
 * Branching is cheap. Use it liberally. Creating branches for epic/feature/bugfix work is highly
   encouraged.
 * Branches should be merged only when all work has been completed and passes an audit.
-* Subagents should use worktrees when their use case fits the situation.
-* Remove worktrees once their changes have been merged back into the main worktree AND — for a 
-  coding task with a paired audit — once that audit has passed. A merge (even a risk-free 
-  fast-forward) is not the cleanup signal by itself; see ~/.claude/CLAUDE-ORCHESTRATOR.md's 
-  "Right-size the parallelism" section for why.
+* Subagents should use worktrees when their use case fits the situation, and commit freely to
+  their own worktree's branch as work progresses — that commit is theirs to make.
+* **Merging a subagent's worktree branch back is the orchestrator's job, never the subagent's
+  own.** A subagent must not merge or remove its own worktree/branch. The orchestrator performs
+  that merge only once the subagent's work has passed its audit (see
+  ~/.claude/CLAUDE-ORCHESTRATOR.md's "Right-size the parallelism" section). If the merge conflicts,
+  the orchestrator resumes the same subagent with the conflict details so it can resolve it with
+  its original context intact, rather than resolving the conflict itself or dispatching a fresh
+  agent.
+* Remove a worktree only after its branch has been merged back by the orchestrator AND — for a
+  coding task with a paired audit — that audit has passed. A merge (even a risk-free fast-forward)
+  is not the cleanup signal by itself.
 * Don't combine multiple changes into a single commit. Use 1 commit per task/fix/chore/etc..
 * Write brief (no more than 2 paragraphs) but meaningful commit messages.
 * It is better to have many small commits than a few large commits.

@@ -49,10 +49,16 @@ replacement for `git stash`: to check whether a failure is pre-existing, run the
   clean (`~/.claude/CLAUDE-BEADS.md`'s "audited before merge" standing convention; this is the same
   gate, not a separate one). Concretely: do not merge the coding agent's branch back — not even a
   risk-free fast-forward — until the audit passes, and do not remove its worktree/branch until
-  *after* that merge. If the audit finds problems, resume the original coding agent with the
-  findings rather than dispatching a fresh one: a resumed agent keeps its context and knows why it
-  made each choice, but only if its worktree still exists to resume it in — which is exactly what
-  auditing before merge/cleanup preserves. See `~/.claude/CLAUDE-CODE-FLOW.md`.
+  *after* that merge. **The merge itself is always the orchestrator's action, never the coding
+  agent's own** — a coding agent must not merge or remove its own worktree/branch. If the audit
+  finds problems, resume the original coding agent with the findings rather than dispatching a
+  fresh one: a resumed agent keeps its context and knows why it made each choice, but only if its
+  worktree still exists to resume it in — which is exactly what auditing before merge/cleanup
+  preserves. The same resume-in-place applies if the merge itself conflicts (a real risk once the
+  merge is no longer a guaranteed fast-forward): resume the same coding agent with the conflict
+  details so it resolves it with full context, rather than resolving the conflict yourself or
+  dispatching a fresh agent that has to re-derive the change from scratch. See
+  `~/.claude/CLAUDE-CODE-FLOW.md`.
 * Tell each agent **not to run the full test suite** while others are mid-edit — it will observe
   half-finished work and report phantom regressions. The orchestrator runs the full suite once
   the tree is quiet. (With per-agent worktrees this restriction disappears, which is most of the
