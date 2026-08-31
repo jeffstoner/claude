@@ -19,6 +19,8 @@ For what these components do and why they are built this way, see `README.md`.
 
 ## 1. Place the instruction files
 
+Add the `*.md` files to your `~/.claude/` directory.
+
 ```
 ~/.claude/CLAUDE.md
 ~/.claude/CLAUDE-CODE-FLOW.md
@@ -161,9 +163,15 @@ when the session started. Open `/hooks` once to reload, or restart the session.
 
 ## 6. bd-board
 
-Install the `bd-board` script into a directory on your PATH, such as `~/.local/bin`
+Copy the `bd-board` script into a directory on your PATH, such as `~/.local/bin`
 
 It requires Python3.
+
+## 7. PRIME.md
+
+The `PRIME.md` is an override to Bead's `bd prime` output. This is necessary as the default
+output contains instructions that may contradict or confuse Claude. Copy this file to the
+`.beads` directory in your repo.
 
 ## 7. Disabling
 

@@ -1,3 +1,60 @@
+# README
+
+This repository contains the framework for one developer's (opinionated) use of Claude. It 
+tries to provide structure for Agents to operate under by defining:
+
+* the use of `beads` as an independent issue tracker
+* the use of an Orchestrator to coordinate work
+* a defined Agent workflow
+  1. write tests
+  2. write code
+  3. audit code and results
+* how to use Git
+* recording "lessons learned" for future agents to reference
+
+Several scripts are provided to use as hooks (*.md files _advise_ while hooks _enforce_) 
+and a CLI to help plan work for Claude.
+
+# Why
+
+This framework was born out of frustrations watching Claude go off the rails, fumble around,
+clobber work. etc. while several subagents worked. As this framework evolved, Claude was 
+observed to properly order its operations, not trust itself (especailly subagents,) run 
+git commands safely, and, in general, behave better.
+
+# Required Tooling
+
+This framework requires the following tools to be installed:
+
+* `beads` (https://github.com/gastownhall/beads) - this is an Agent-first issue tracker. It 
+provides enough structure and features to allow Agents to work very effectively while not
+being overburdened by crap and fluff only humans care about but do not actually contribute
+to software development.
+* `jq` (https://jqlang.org/) - this "Swiss Army Knife for JSON" allows Agents to parse the 
+JSON output of `beads` as well as work effectively in projects that utilize JSON, too.
+
+**Recommended** `bead-me-up-scotty` (https://beadmeupscotty.com/) is a clean, slick UI that
+allows humans to work with beads in a more intuitive manner. In its absence, you can use the 
+supplied `bd-board` to help identify which beads are ready to begin work.
+
+# How Do I Use It?
+
+While designed to allow the human to do all the specification work and hand off implementation
+to Claude, it doesn't have to follow this pattern. You can use a more human-in-the-loop
+approach. You can define the scope of work, you can write the beads, you can write the tests,
+you can implement the code, you can do the auditing - you can hand off any one or more pieces
+to Claude - **but** you need to use beads for anything Claude needs. This is central to the 
+workflow since it is how dependencies are defined, how work the work is specified, how the 
+completed work is recorded, and how it can be audited.
+
+**Important** - when starting a session with Claude, tell it that it is the Orchestrator. This
+is the key to having it follow the full workflow, from writing beads, to launching subagents,
+to validating results, and learning from itself. Then you session can be as simple as:
+
+```
+> Act as the Orchestrator. Work beads `gg-12.1` and `gg-13.4`
+```
+
 # Agent instruction set + enforcement hooks
 
 A set of instruction files that shape how coding agents work, plus five hooks that enforce the rules
