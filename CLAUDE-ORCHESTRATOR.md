@@ -1,5 +1,36 @@
 # Multi-Agent Orchestration
 
+## No unverified assertions
+
+A dispatch prompt, bead, or audit brief is an instruction an agent will act on
+without re-deriving. A false claim in one becomes wrong business logic, wrong
+framework usage, or a test that passes while asserting the wrong thing.
+
+**Verify before you write it down** whenever the claim is:
+
+* **Mechanism** — how a framework, library, or language construct behaves
+  ("the array holds gaps", "this cast throws", "globalOptions applies here").
+* **Reachability** — "this can't happen", "nothing writes that", "no caller does X".
+* **Coverage** — "the test catches that", "a wrong implementation would fail here".
+* **A number** — a count, a window, a timeout, a budget.
+
+**Verified means executed or read at the source**: run it, probe it in a REPL,
+read the vendored code. It does NOT mean reasoning from documented defaults,
+and it does NOT mean an agent reported it — a subagent's report is a claim to
+check, not evidence. **Relayed claims are the main risk**: most false assertions
+are ones you repeated, not ones you invented, and recording one in a bead
+launders it into authority for the next agent.
+
+**When you can't verify cheaply, mark it.** Write "unverified:" or "static
+analysis, not executed" in the bead, and make confirming it an explicit task
+for whoever can. An assumption labelled as one is safe; an assumption phrased
+as a fact is what causes the damage.
+
+**Tell agents to challenge, not just to comply.** Every brief that carries a
+mechanism claim should say to verify it against the source and report back if
+it's wrong, rather than build on it. This has repeatedly caught claims the
+orchestrator got wrong — it's the cheapest check available.
+
 ## Resolve cross-task design ambiguity before dispatching
 
 Before dispatching multiple subagents whose work will compose or interact — one task's output feeds another, two tasks might duplicate the same logic, a technical approach has real tradeoffs — identify and resolve any genuine cross-task design ambiguity yourself first. Don't leave it for individual subagents to independently guess.
