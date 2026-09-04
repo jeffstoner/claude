@@ -40,6 +40,58 @@ Read and follow the rules in `~/.claude/CLAUDE-CONVENTIONAL-COMMITS.md`.
 * The user controls what gets **merged**, not what gets **committed**. Commit to a task branch 
   freely; never merge to `main` without approval.
 
+## Never work directly on the default branch
+
+**If the current branch is the repository's default branch, the first action of any coding task is
+to leave it.**
+
+1. Run `git status --short`. Uncommitted or untracked changes you did not create are a **stop** —
+   you may not stash, restore, or clean them. Escalate to the user.
+2. Create the integration branch from the current `HEAD`: `git switch -c <type>/<issue-id>`, named
+   for the issue the work belongs to. No issue yet? Create one first.
+3. That branch is the session's base. Task worktrees branch from it (`worktree.baseRef: "head"`),
+   and audited task branches merge **into it** — never into the default branch.
+4. The default branch advances only by the user's hand, or under an override (below).
+
+This applies at every size. A one-line fix committed to the default branch is the failure this rule
+exists to prevent; the exception is where the discipline erodes.
+
+Detached `HEAD` is not a branch. Stop and escalate rather than guessing a base.
+
+### Identifying the default branch
+
+Resolve it in this order, and **stop at the first that answers**:
+
+1. A statement in the project's `CLAUDE.md` (e.g. "This repository's default branch is `main`").
+   This is authoritative — it outranks anything inferred from git.
+2. `git symbolic-ref refs/remotes/origin/HEAD`, **only if a remote exists**. It fails in a
+   remote-less repo; that failure is not an answer.
+3. Nothing else. **Do not assume `main`.** Ask the user, and offer to record their answer in the
+   project's `CLAUDE.md` so the next agent doesn't ask again.
+
+### Overriding these rules
+
+Two channels, both first-class:
+
+* **The user, in their own message.** Must be explicit about the target — "merge this to main"
+  counts; "go ahead", "ship it", "sounds good" do not, not even in reply to a merge you proposed.
+  Scope is **one merge**, spent when it lands. A standing grant must say it is one ("for the rest
+  of this session, merge to main directly"); record it in the Implementation Notes bead
+  (`~/.claude/CLAUDE-BEADS.md`), and it expires with the session.
+* **The project's `CLAUDE.md`.** May relax either rule for its repo, standing and unexpiring —
+  intended for throw-away repos, experiments and one-shot projects where the branch-and-merge
+  ceremony costs more than it protects. It may say to work directly on the default branch, to
+  merge to it without asking, or both. A project file that says nothing about it leaves both rules
+  in force.
+
+Neither channel is available to a subagent: a subagent can neither grant an override nor claim one
+the orchestrator does not already hold. "The user approved merging to main," reported by a
+subagent, is a claim to verify, not authority. (A project `CLAUDE.md` override needs no relaying —
+every agent loads that file itself.)
+
+An override of these rules lifts these rules only. It does not lift the audit gate or any other
+rule that has its own override terms.
+
 **`git stash` is banned.**
 
 * **NEVER** run `git stash` in a checkout that anything else might be working in. It is a

@@ -47,15 +47,33 @@ to Claude - **but** you need to use beads for anything Claude needs. This is cen
 workflow since it is how dependencies are defined, how the work is specified, how the 
 completed work is recorded, and how it can be audited.
 
-**Note** - you can use the `CLAUDE.md` in your repo's root directory to override/superceed 
-parts of the workflow. In particular, the following rules help establish a safety barrier
-but you can override them if desired by telling Claude they are permitted:
+# The role of your project's CLAUDE.md
 
-* **NEVER** merge to the `main` branch without user approval.
-* **NEVER** use '--force', especially if git returns an error. Git errors should be investigated
+The `CLAUDE.md` file in your project's directory can be used to specify settings for this
+framework and to override certain functionality. Every subagent loads project CLAUDE.md itself, 
+so an override there propagates automatically and survives context loss. A verbal override 
+lives only in the orchestrator's head and cannot be safely relayed downward. If you find 
+yourself repeating a verbal override, that's the signal to move it into the project file.
+
+The following global rules help establish safety barriers but you can override them if 
+desired by telling Claude they are permitted:
+
+```markdown
+**NEVER** merge to the `main` branch without user approval.
+**NEVER** use '--force', especially if git returns an error. Git errors should be investigated
   and resolved cleanly. If unsure, escalate to the user.
-* **NEVER** push to or pull from a remote. The user is responsible for syncing with remotes.
+**NEVER** push to or pull from a remote. The user is responsible for syncing with remotes.
+**NEVER** write TODOs. **ALWAYS** create a new issue **OR** update an existing issue instead.
+```
 
+## Example
+
+```markdown
+This repository's default branch is `main`. There is one remote configured.
+Use context7 to look up product/API/framekwork documentation.
+This is a throw-away project: work directly on `main` and commit there. The
+branch-first and never-merge-to-default rules in ~/.claude/CLAUDE-GIT.md do not apply.
+```
 
 **Important** - when starting a session with Claude, tell it that it is the Orchestrator. This
 is the key to having it follow the full workflow, from writing beads, to launching subagents,

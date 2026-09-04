@@ -28,9 +28,10 @@ Use Test Driven Development when coding.
 - A closed issue's close-reason is a **claim about a past working tree**, not evidence. Before
   building on one, verify the code exists: grep for the symbols the close-reason names. This
   takes seconds and catches the failure mode where a whole subsystem is missing.
-- **NEVER** write TODOs for work that is still to be done. **ALWAYS** create a new issue in the 
-  issue tracker **OR** update an existing issue with sufficient context and direction to finish 
-  the work.
+- **NEVER** write TODOs for work that is still to be done. **ALWAYS** create a new issue in the
+  issue tracker **OR** update an existing issue with sufficient context and direction to finish
+  the work. Where a project has switched tracking off (`~/.claude/CLAUDE-BEADS.md`), report the
+  work to the user instead — the ban is on leaving work undiscoverable, not on any one destination.
 
 ## Closing a task: the audit gates the close
 

@@ -1,6 +1,5 @@
 # Beads
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:1105d646 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -64,4 +63,40 @@ If it no longer fits on one screen, notes are being misrouted - re-apply the tab
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/core-concepts/sync-concepts.md for details and anti-patterns.
 
-<!-- END BEADS INTEGRATION -->
+## Overriding beads
+
+A project's `CLAUDE.md` may switch issue tracking off for its repo — intended for throw-away
+projects, experiments and one-shots where filing a bead per task costs more than it returns. It
+does so by saying so plainly, e.g.:
+
+> This project does not use an issue tracker. Do not create beads; report work in conversation.
+
+With tracking off:
+
+* **Do not create beads, and do not substitute a shadow tracker** — no `TodoWrite`, no
+  `tasks/todo.md`, no markdown checklist. If the project names a replacement, use that one and
+  nothing else. If it names none, the conversation is the record.
+* **Commit scope becomes `NOTICKET`** (`~/.claude/CLAUDE-CONVENTIONAL-COMMITS.md`), and branch
+  names drop the issue ID: `<type>/<short-slug>`.
+* **Unfinished work is reported to the user before the task ends**, named specifically enough to
+  act on. The ban on silent TODOs is not lifted — only its destination changes. A `TODO` left in
+  code with no bead and no report is still exactly the failure that rule exists to prevent.
+
+### What this override does not lift
+
+**Tests are written by a different agent than the implementation, and every implementation is
+independently audited before merge.** Those hold in every repo, always. No project file relaxes
+them.
+
+They consume artifacts the bead normally carries, so with tracking off those move — they do not
+disappear:
+
+* The coding agent's work description and its `artifacts` JSON block go in the **commit message
+  body**, same schema as the close-reason block (`~/.claude/CLAUDE-CODE-FLOW.md`). The auditor
+  reads it there. Correcting it after audit is an amend on the task branch, which is pre-merge and
+  therefore safe.
+* The post-implementation review that would have been the close reason goes to the orchestrator in
+  the agent's final report, and from the orchestrator to the user.
+* **The session-close integrity check degrades and you must cover for it.** It walks close-reasons;
+  there are none. Run the equivalent by hand over the session's commits — grep each `artifacts`
+  entry's symbols against the repo — and report anything missing.
