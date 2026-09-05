@@ -18,6 +18,24 @@ bd close <id>         # Complete work
 - Use `bd` for ALL task tracking - do NOT use TodoWrite, TaskCreate, or markdown TODO lists
 - Run `bd prime` for detailed command reference
 
+### Nuances when using beads
+
+Never reconstruct a bead field through an inline command substitution. Keep the source text on
+disk and rebuild the whole field from files, then verify:
+
+```bash
+cat original-design.txt append.txt > full-design.txt
+bd update <id> --design-file full-design.txt          # or --design="$(cat full-design.txt)"
+bd show <id> | grep -c "^  D[1-9] --"                 # assert the expected section count
+```
+
+`--body-file` and `--design-file` are the better channel for long text regardless — it avoids 
+shell quoting entirely.
+
+The only exception to this is the `notes` field. The `--append-notes` command appends the 
+given text to the `notes` field. You **MUST** use `--append-notes` and not `--notes`. 
+The `--notes` command will *overwrite* the contents of the `notes` field in a bead.
+
 ### Orchestrator: where a note goes
 
 Agents surface things that outlive their own task - gaps, spec conflicts, cross-bead
