@@ -44,15 +44,23 @@ format) and explain themselves when they fire.
   declares them with `Test-paths:` lines; if it does not and you need one, stop and report it.
 - Do not run the full suite while others are mid-edit unless the brief says the tree is quiet.
 - **No TODO comments.** Missing coverage you cannot write now gets a bead or goes in your report.
-- **Commit early** on this branch: `test(<issue-id>): what the tests prove`, footer `Ref:
-  <issue-id>`; `NOTICKET` as the scope with tracking off. Never stash, never `--force`.
+- **Commit early** on this branch: `test(<issue-id>): what the tests prove` (≤ 72 chars), footer
+  `Ref: <issue-id>`; `NOTICKET` as the scope with tracking off. Pass the message with
+  `git commit -F - <<'EOF'`, no scratch file. Never stash, never `--force`.
 - Do not merge, remove this worktree, delete branches or close the issue.
 
 ## Finish
 
-Append (never replace) a description for human review to the bead:
-`bd update <id> --append-notes "$(cat <path>)"`, ending in the artifacts block the auditor and the stop
-hook read:
+Append (never replace) a description for human review to the bead with a heredoc, no scratch file:
+
+```bash
+bd update <id> --append-notes "$(cat <<'EOF'
+<which behaviours are covered, how each test would fail a wrong implementation>
+EOF
+)"
+```
+
+It ends with the artifacts block the auditor and the stop hook read:
 
 ```json
 { "artifacts": [ { "path": "tests/pkg/test_mod.py", "symbols": ["test_rejects_out_of_scope"] } ] }

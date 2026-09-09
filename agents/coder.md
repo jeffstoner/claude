@@ -46,7 +46,8 @@ test files, no merge, no close, commit format) and explain themselves when they 
   named in your final report.
 - **Commit early**, on this branch, as soon as your quality gates pass. Committed work is
   unloseable; uncommitted work is one bad command away from gone. One commit per task, subject
-  `type(<issue-id>): imperative summary`, footers `Ref: <issue-id>` and `Assisted-by: <model id>`;
+  `type(<issue-id>): imperative summary` (≤ 72 chars), footers `Ref: <issue-id>` and
+  `Assisted-by: <model id>`; pass the message with `git commit -F - <<'EOF'`, no scratch file;
   `NOTICKET` as the scope when tracking is off. Never stash, never discard changes you did not
   make, never `--force`.
 - Do not merge, do not remove this worktree, do not delete branches, do not close the issue. The
@@ -55,9 +56,17 @@ test files, no merge, no close, commit format) and explain themselves when they 
 
 ## Finish
 
-Write the description of your work for human review to a file and append it to the bead, never
-replacing: `bd update <id> --append-notes "$(cat <path>)"`. It ends with the artifacts block, which the
-auditor and the stop hook read:
+Append (never replace) the description of your work for human review to the bead, with a heredoc so
+no scratch file is needed:
+
+```bash
+bd update <id> --append-notes "$(cat <<'EOF'
+<what was built, how the tests verify it, what was deliberately left undone>
+EOF
+)"
+```
+
+It ends with the artifacts block, which the auditor and the stop hook read:
 
 ```json
 {

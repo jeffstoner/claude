@@ -80,6 +80,27 @@ bash_writes() {
   printf '%s' "$1" | sed -E 's/2>&1//g; s/&?>[[:space:]]*\/dev\/null//g; s/2>[[:space:]]*\/dev\/null//g; s/<\(//g' \
     | grep -qE '(>|\btee\b|\bsed[[:space:]]+(-[a-zA-Z]*i|--in-place)|\b(cp|mv|rm|touch|mkdir|install|ln)\b|\bpython[0-9.]*[[:space:]]+-c\b.*open\()'
 }
+# Is this path inside the repository? Scratch files (the scratchpad, /tmp) are not
+# implementation and are nobody's concern here.
+in_repo_path() {
+  case "$1" in
+    /*) case "$1" in "$root"/*) return 0 ;; *) return 1 ;; esac ;;
+    *)  return 0 ;;
+  esac
+}
+# Any in-repo path token in the command that is NOT a test path? (Used by the tester
+# side; a write to a scratch file outside the repo is fine.)
+bash_mentions_repo_nontest_path() {
+  local tok
+  for tok in $(printf '%s' "$1" | tr -d '"'"'" | tr '[:space:]' '\n'); do
+    case "$tok" in -*|""|*=*) continue ;; esac
+    printf '%s' "$tok" | grep -qE '/|\.[A-Za-z0-9]+$' || continue      # path-shaped only
+    in_repo_path "$tok" || continue
+    is_test_path "${tok#"$root"/}" && continue
+    return 0
+  done
+  return 1
+}
 # Any test-looking path token in the command?
 bash_mentions_test_path() {
   local tok
@@ -108,13 +129,13 @@ case "$role" in
   tester)
     case "$tool" in
       Edit|Write|NotebookEdit|MultiEdit)
-        if [ -n "$rel" ] && ! is_test_path "$rel"; then
+        if [ -n "$rel" ] && in_repo_path "$file" && ! is_test_path "$rel"; then
           ask "You are the tester; '$rel' does not look like a test file. The tester writes ONLY tests (and test fixtures/config) — never implementation. If this language keeps tests inside source files, the project can declare them with a CLAUDE.md line 'Test-paths: <glob>'. Approve only if this file genuinely is test code."
         fi ;;
       Bash)
-        if bash_writes "$cmd" && ! bash_mentions_test_path "$cmd" \
+        if bash_writes "$cmd" && bash_mentions_repo_nontest_path "$cmd" \
            && ! printf '%s' "$cmd" | grep -qE '(^|[[:space:]({])(git|bd)([[:space:]]|$)'; then
-          ask "This command appears to write outside the test paths. The tester writes only tests. Approve only if the target is test code or scratch output."
+          ask "This command appears to write to a non-test path inside the repository. The tester writes only tests. Approve only if the target is test code. (Scratch files outside the repository are fine.)"
         fi ;;
     esac
     ;;
