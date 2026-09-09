@@ -102,10 +102,16 @@ Use context7 to look up product/API/framework documentation.
 
 | Agent | Tools | Body carries |
 |---|---|---|
-| `orchestrator` | `Agent(tester, coder, auditor, Explore, Plan)`, Bash, Read, Grep, Glob, Write, Skill | no unverified assertions; resolve cross-task ambiguity first; premise-in-tree before dispatch; audit → merge → cleanup → close; resume the same coder for findings and conflicts; note routing; tracking-off mode; default-branch resolution |
+| `orchestrator` | `Agent(tester, coder, auditor, Explore, Plan)`, Bash, Read, Grep, Glob, Write, Skill | no unverified assertions; resolve cross-task ambiguity first; premise-in-tree before dispatch; audit → merge → close → cleanup; harness-created worktrees, never hand-assigned; resume the same coder for findings and conflicts; note routing; tracking-off mode; default-branch resolution |
 | `tester` | edit tools, Bash; `isolation: worktree`; agent hook `guard-edit.sh tester` | writes only tests; tests must fail for the right reason first; artifacts block; `ESCALATION:` escape |
 | `coder` | edit tools, Bash; `isolation: worktree`; agent hook `guard-edit.sh coder` | TDD loop with the 10-attempt limit; never touches tests; challenge the brief; commit early; artifacts block; `ESCALATION:` escape |
 | `auditor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh auditor` | audit against the code, not the account; check the premise, the artifacts block, the tests against the criteria; report format; out-of-scope → own bead |
+
+The `tester` and `coder` worktrees are created by the harness from `isolation: worktree` and become
+the agent's working directory; the orchestrator must not create or assign a second one, and the
+auditor gets none (it reads the coder's worktree by path). Agents see each other's work only through
+merges into the integration branch, which is why the orchestrator merges the tester's branch before
+dispatching the coder.
 
 The orchestrator's `tools` line is an allowlist: it can dispatch only those agent types. Run it as
 the main session with `claude --agent orchestrator`. Whether `SendMessage` (used to resume a stopped
@@ -116,7 +122,7 @@ fails, remove it from the list and use the `Agent` tool's resume path.
 
 | Script | Event | What it enforces |
 |---|---|---|
-| `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | no stash / pathspec checkout / hard reset / clean / push / pull / `--force` (except `worktree add -f`); a **subagent** may not merge, delete a branch or remove a worktree; **no commit on the default branch**, detached HEAD is a stop; **merge into the default branch asks the user**; a worktree is removed only once its branch is merged; `branch -D` never; branch names `<type>/<id>`; SemVer tags; **Conventional Commits** with a scope, ≤ 72-char subject, `!` ⇔ `BREAKING CHANGE:` |
+| `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | no stash / pathspec checkout / hard reset / clean / push / pull / `--force` (except `worktree add -f`); a **subagent** may not merge, delete a branch or remove a worktree; **no commit on the default branch**, detached HEAD is a stop; **merge into the default branch asks the user**; a worktree is removed only once its branch is merged; `branch -D` never; branch names `<type>/<id>` for branches created by hand (harness-generated worktree branches never pass through the hook); SemVer tags; **Conventional Commits** with a scope, ≤ 72-char subject, `!` ⇔ `BREAKING CHANGE:` |
 | `guard-bd.sh` | `PreToolUse`, `if: Bash(bd *)` | `--notes` (the replace form) denied, `--append-notes` only; no inline `$(...)` into fields except `$(cat <file>)`; `bd edit` denied; a subagent may not `bd close` or `--status=closed`; `bd label add <id> human` asks |
 | `guard-edit.sh` | `PreToolUse`, `Edit\|Write\|NotebookEdit\|MultiEdit` (global) and per-agent | global: an edit may not **add** a TODO/FIXME comment; `coder`: no test paths; `tester`: only test paths (asks otherwise); `auditor`: no Bash writes, no git/bd mutations |
 | `guard-dispatch.sh` | `PreToolUse`, `Agent\|TodoWrite\|TaskCreate\|TaskUpdate` | in a beads project: no TodoWrite/TaskCreate; no `general-purpose` agent for work, use the role agents |

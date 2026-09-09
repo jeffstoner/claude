@@ -43,6 +43,25 @@ false claim in one becomes wrong code, or a test that passes while asserting the
 4. Keep one read-only baseline worktree pinned at the integration branch's HEAD (the
    `worktree-setup` skill). It replaces `git stash` for "is this failure pre-existing?".
 
+## Worktrees: the harness makes them, you do not
+
+The `tester` and `coder` agents declare `isolation: worktree`. When you dispatch one, the harness
+creates its worktree under `.claude/worktrees/` from the current HEAD and makes it the agent's
+working directory. **Do not create or assign a worktree for them yourself** and do not pass
+`isolation` in the dispatch: an agent with two worktrees does its work in one while its working
+directory is the other, which is how files land in the wrong tree. Tell the agent only the bead id
+and its file ownership; it is already in the right place.
+
+When the agent stops, find its worktree and branch:
+
+```bash
+git worktree list --porcelain     # the entry under .claude/worktrees/ whose HEAD commit is scoped (<bead-id>)
+```
+
+That branch is what you merge; that path is what you give the auditor. Harness-generated branch
+names do not follow `<type>/<id>`; the commit scope carries the id instead. The `auditor` has no
+isolation and must not be given any: it reads the coder's worktree by the path in its brief.
+
 ## Before dispatching
 
 - **Resolve cross-task design ambiguity yourself first**: shared vs duplicated logic, which task owns
@@ -63,21 +82,25 @@ false claim in one becomes wrong code, or a test that passes while asserting the
 ## Per task
 
 1. **tester** — brief: bead id, acceptance criteria, files it owns, what a wrong implementation
-   would look like. It commits tests to its worktree branch and records an artifacts block in the
-   bead's notes. Confirm the tests fail for the intended reason, then merge its branch into the
-   integration branch so the coder's worktree starts with them.
+   would look like. It commits tests to its (harness-created) worktree branch and records an
+   artifacts block in the bead's notes. Confirm the tests fail for the intended reason, then merge
+   its branch into the integration branch and remove its worktree, so the coder's worktree, created
+   next from HEAD, starts with the tests.
 2. **coder** — brief: bead id, where the tests are, files it owns, other agents' paths, the
-   mechanism claims to challenge. It implements in its own worktree, commits per task, records its
+   mechanism claims to challenge. It implements in its worktree, commits per task, records its
    artifacts block in the bead's notes and stops. It does not merge, clean up or close; the stop hook
    verifies its block against the disk before it may stop.
-3. **auditor** — brief: bead id, the coder's worktree path and branch, the bead's specific attack
-   surface (not a generic checklist). Read-only. It audits against the code, never the coder's
-   account.
+3. **auditor** — brief: bead id, the coder's worktree path and branch (from `git worktree list`),
+   the bead's specific attack surface (not a generic checklist). Read-only, no isolation. It audits
+   against the code, never the coder's account.
 4. **Audit clean** → merge the coder's branch into the integration branch → read the post-merge
-   untracked-file report the hook emits and investigate anything unexpected → remove the worktree →
-   `bd close <id> --reason-file <path>`. The close reason is the post-implementation review: what was
-   built, what the audit found, what was deliberately left undone, ending in the artifacts block
-   (the close gate requires it; use the file form to avoid shell escaping).
+   untracked-file report the hook emits and investigate anything unexpected →
+   `bd close <id> --reason-file <path>` → remove the coder's worktree (`git worktree remove <path>`;
+   the guard confirms the branch is merged) and delete its branch with `-d`. Not before the close: a
+   resumed agent keeps its working directory, so removing the worktree earlier breaks resume. The
+   close reason is the post-implementation review: what was built, what the audit found, what was
+   deliberately left undone, ending in the artifacts block (the close gate requires it; use the file
+   form to avoid shell escaping).
 5. **Audit findings** → resume the *same* coder with the findings. It keeps its context and knows
    why it made each choice, but only while its worktree still exists, which is exactly why nothing
    merges or gets removed before the audit. Re-audit after the fix. **Merge conflict** → resume the
@@ -86,7 +109,7 @@ false claim in one becomes wrong code, or a test that passes while asserting the
    unchanged, only slower.
 6. Real findings outside the audited bead's scope get their own bead, never scope-crept in.
    Anything not fixed now goes to the user, who decides: fix now, or a new bead carrying the detail.
-7. Order is absolute: **audit, then merge, then cleanup, then close.** Merging is always your
+7. Order is absolute: **audit, then merge, then close, then cleanup.** Merging is always your
    action, never the coder's.
 
 ## Where a note goes
