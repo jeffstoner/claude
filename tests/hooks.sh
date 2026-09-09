@@ -129,6 +129,8 @@ e coder "write _test.go" deny "$(pwrite "$R" "$R/pkg/foo_test.go" x)"
 eb coder "redirect into tests/" deny 'echo x > tests/test_new.py'
 eb coder "run pytest" allow 'pytest tests/ -q 2>&1 | tail -5'
 eb coder "sed -i test file" deny 'sed -i s/a/b/ tests/test_mod.py'
+O="$TMP/outside/scratch"; mkdir -p "$O"
+e coder "write scratch file outside repo" allow "$(pwrite "$R" "$O/notes.md" x)"
 printf 'Test-paths: src/**/*_spec.rb\n' > "$R/CLAUDE.md"
 e coder "write Test-paths match" deny "$(pwrite "$R" "$R/src/a/b_spec.rb" x)"
 e coder "write Test-paths ** zero depth" deny "$(pwrite "$R" "$R/src/a_spec.rb" x)"
@@ -142,6 +144,10 @@ e tester "edit test file" allow "$(pedit "$R" "$R/tests/test_mod.py" a b)"
 e tester "edit src file" ask "$(pedit "$R" "$R/src/mod.py" a b)"
 eb tester "git add && commit" allow 'git add tests && git commit -m "test(gg-1): x"'
 eb tester "redirect into src/" ask 'echo x > src/mod.py'
+e tester "write scratch file outside repo" allow "$(pwrite "$R" "$O/bd_notes.md" x)"
+eb tester "heredoc redirect outside repo" allow $'cat > '"$O"$'/commit_msg.txt <<EOF\ntest(gg-1): x\nEOF'
+eb tester "redirect into tests/" allow 'echo x > tests/test_new.py'
+e tester "write src file (absolute, in repo)" ask "$(pwrite "$R" "$R/src/mod.py" x)"
 eb auditor "git commit" deny 'git commit -m x'
 eb auditor "git log && diff" allow 'git log --oneline && git diff main...HEAD'
 eb auditor "bd update" deny 'bd update gg-1 --append-notes x'
