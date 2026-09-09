@@ -79,19 +79,19 @@ Read and follow the rules in `~/.claude/CLAUDE-CODE-FLOW.md`.
 # Git
 
 Whether acting as an orchestrator, as a subagent, or as a regular agent working independently,
-read and obey the rules in `~/.claude/CLAUDE-GIT.md`.
+read and obey the rules in `@~/.claude/CLAUDE-GIT.md`.
 
 # Orchestrator
 
 When acting as an orchestrator or simply dispatching agents, read and follow the rules in 
-`~/.claude/CLAUDE-ORCHESTRATOR.md`.
+`@~/.claude/CLAUDE-ORCHESTRATOR.md`.
 
 # Learnings
 
-Agents **MUST** read `~/.claude/CLAUDE-LEARNINGS.md` before working in a codebase, for rules on
+Agents **MUST** read `@~/.claude/CLAUDE-LEARNINGS.md` before working in a codebase, for rules on
 learning from past agents and teaching future ones about encountered failures.
 
 # Beads
 
 When using `beads` as the project issue tracker, read and follow the rules in
-`~/.claude/CLAUDE-BEADS.md`. When using a different issue tracker, ignore this file.
+`@~/.claude/CLAUDE-BEADS.md`. When using a different issue tracker, ignore this file.
