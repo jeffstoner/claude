@@ -24,13 +24,18 @@ set -uo pipefail
 
 read_payload
 [ -z "$cmd" ] && exit 0
+# Everything below except the commit-message parser matches on the command with its
+# prose removed (heredoc bodies, quoted strings), so a message saying "clean up" is
+# not `git clean`.
+code="$(strip_literals "$cmd")"
 # Only inspect git invocations. `git` must appear as a command word, not inside a path.
-printf '%s' "$cmd" | grep -qE '(^|[;&|(){}[:space:]])git([[:space:]]|$)' || exit 0
+printf '%s' "$code" | grep -qE '(^|[;&|(){}[:space:]])git([[:space:]]|$)' || exit 0
 
-# Does $cmd use this git subcommand? Matched as a whole word anywhere after `git`,
-# so global options with values (`git -C /repo stash`) are covered. Deliberately
-# over-inclusive: over-blocking is recoverable, destroying a peer's work is not.
-uses() { printf '%s' "$cmd" | grep -qwE "$1"; }
+# Does the command use this git subcommand? Matched as a whole word anywhere after
+# `git`, so global options with values (`git -C /repo stash`) are covered.
+# Deliberately over-inclusive: over-blocking is recoverable, destroying a peer's
+# work is not.
+uses() { printf '%s' "$code" | grep -qwE "$1"; }
 
 # ---- 1. stash --------------------------------------------------------------
 if uses 'stash'; then
@@ -39,12 +44,12 @@ fi
 
 # ---- 2. Discarding working-tree changes ------------------------------------
 if uses 'checkout|restore' \
-   && printf '%s' "$cmd" | grep -qE '(--[[:space:]]|--force|--hard|\.$)'; then
+   && printf '%s' "$code" | grep -qE '(--[[:space:]]|--force|--hard|\.$)'; then
   deny "BLOCKED: 'git checkout/restore' with a pathspec discards uncommitted changes, which in a shared checkout may not be yours. Read the committed version with 'git show HEAD:<path>' instead."
 fi
 
 # ---- 3. Hard reset / clean -------------------------------------------------
-if uses 'reset' && printf '%s' "$cmd" | grep -qE '\-\-hard|\-\-merge|\-\-keep'; then
+if uses 'reset' && printf '%s' "$code" | grep -qE '\-\-hard|\-\-merge|\-\-keep'; then
   deny "BLOCKED: 'git reset --hard' (or --merge/--keep) discards uncommitted work across the whole tree. Never run this in a shared checkout."
 fi
 if uses 'clean'; then
@@ -55,7 +60,7 @@ fi
 if uses 'push|pull'; then
   deny "BLOCKED: pushing to or pulling from a remote is the user's responsibility. Report the command you would run and let the user run it."
 fi
-if printf '%s' "$cmd" | grep -qE '(--force([[:space:]]|=|$)|[[:space:]]-f([[:space:]]|$))'; then
+if printf '%s' "$code" | grep -qE '(--force([[:space:]]|=|$)|[[:space:]]-f([[:space:]]|$))'; then
   # The one legitimate use is `worktree add -f` (reuse a branch already checked out).
   # `worktree remove --force` destroys that worktree's uncommitted work -- the exact
   # loss this script exists to prevent -- so it is NOT exempt.
@@ -166,21 +171,23 @@ while IFS= read -r seg; do
       fi
       ;;
   esac
-done < <(split_segments "$cmd")
+done < <(split_segments "$code")
 
 # ---- 10. Conventional Commits -----------------------------------------------
 # Only when the command commits with a message we can see. Reused/edited
 # messages (-C, -c, --amend --no-edit, --fixup, --squash) and editor sessions pass.
-if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])commit([[:space:]]|$)' \
-   && ! printf '%s' "$cmd" | grep -qE '(^|[[:space:]])(-[cC]|--reuse-message|--reedit-message|--fixup|--squash|--no-edit)([[:space:]=]|$)'; then
+# Whether this is a commit, and which form carries the message, is read from the
+# code; the message itself is read from the full command.
+if printf '%s' "$code" | grep -qE '(^|[[:space:]])commit([[:space:]]|$)' \
+   && ! printf '%s' "$code" | grep -qE '(^|[[:space:]])(-[cC]|--reuse-message|--reedit-message|--fixup|--squash|--no-edit)([[:space:]=]|$)'; then
   msg=""
-  if printf '%s' "$cmd" | grep -qE '<<-?[[:space:]]*'"'"'?"?[A-Za-z_]+'"'"'?"?'; then
+  if printf '%s' "$code" | grep -qE '<<-?[[:space:]]*'"'"'?"?[A-Za-z_]*'"'"'?"?'; then
     # Heredoc form: git commit -m "$(cat <<'EOF' ... EOF)"
     msg="$(printf '%s\n' "$cmd" | awk '
       /<<-?[[:space:]]*['"'"'"]?[A-Za-z_]+['"'"'"]?/ && !inb { match($0, /<<-?[[:space:]]*['"'"'"]?[A-Za-z_]+/); t=substr($0,RSTART,RLENGTH); gsub(/<<-?[[:space:]]*['"'"'"]?/,"",t); tag=t; inb=1; next }
       inb && $0 ~ "^[[:space:]]*" tag "[[:space:]]*$" { exit }
       inb { print }')"
-  elif printf '%s' "$cmd" | grep -qE '(^|[[:space:]])(-F|--file)[[:space:]=]'; then
+  elif printf '%s' "$code" | grep -qE '(^|[[:space:]])(-F|--file)[[:space:]=]'; then
     mf="$(printf '%s' "$cmd" | grep -oE '(-F|--file)[[:space:]=]+[^[:space:]]+' | head -1 | sed -E 's/^(-F|--file)[[:space:]=]+//')"
     [ "$mf" != "-" ] && { [ "${mf#/}" = "$mf" ] && mf="$cwd/$mf"; [ -r "$mf" ] && msg="$(cat "$mf")"; }
   else

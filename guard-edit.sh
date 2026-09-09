@@ -27,6 +27,9 @@ set -uo pipefail
 
 role="${1:-global}"
 read_payload
+# Bash heuristics look at the command with heredoc bodies and quoted prose removed,
+# so a bead note that mentions a test path or contains "->" is not a write to it.
+code="$(strip_literals "$cmd")"
 
 file="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null)"
 root="$(repo_root || printf '%s' "$cwd")"
@@ -122,7 +125,7 @@ case "$role" in
         [ -n "$rel" ] && is_test_path "$rel" && \
           deny "BLOCKED: you are the coder; '$rel' is a test file. A coding agent NEVER writes or modifies tests — tests are written by the tester agent, always. If a test is wrong, say so in your notes/report with the specific assertion and why; the orchestrator routes it. Make the tests pass by changing the implementation." ;;
       Bash)
-        bash_writes "$cmd" && bash_mentions_test_path "$cmd" && \
+        bash_writes "$code" && bash_mentions_test_path "$code" && \
           deny "BLOCKED: this command appears to write to a test path. The coder never creates or modifies tests; report the problem with the test instead." ;;
     esac
     ;;
@@ -133,21 +136,21 @@ case "$role" in
           ask "You are the tester; '$rel' does not look like a test file. The tester writes ONLY tests (and test fixtures/config) — never implementation. If this language keeps tests inside source files, the project can declare them with a CLAUDE.md line 'Test-paths: <glob>'. Approve only if this file genuinely is test code."
         fi ;;
       Bash)
-        if bash_writes "$cmd" && bash_mentions_repo_nontest_path "$cmd" \
-           && ! printf '%s' "$cmd" | grep -qE '(^|[[:space:]({])(git|bd)([[:space:]]|$)'; then
+        if bash_writes "$code" && bash_mentions_repo_nontest_path "$code" \
+           && ! printf '%s' "$code" | grep -qE '(^|[[:space:]({])(git|bd)([[:space:]]|$)'; then
           ask "This command appears to write to a non-test path inside the repository. The tester writes only tests. Approve only if the target is test code. (Scratch files outside the repository are fine.)"
         fi ;;
     esac
     ;;
   auditor)
     [ "$tool" = "Bash" ] || exit 0
-    if printf '%s' "$cmd" | grep -qE '(^|[[:space:]({])git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(add|commit|merge|rebase|cherry-pick|reset|checkout|switch|restore|rm|mv|stash|worktree|branch[[:space:]]+-|tag|push|pull|clean)\b'; then
+    if printf '%s' "$code" | grep -qE '(^|[[:space:]({])git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(add|commit|merge|rebase|cherry-pick|reset|checkout|switch|restore|rm|mv|stash|worktree|branch[[:space:]]+-|tag|push|pull|clean)\b'; then
       deny "BLOCKED: the auditor changes nothing. Read-only git only (log, show, diff, status, grep, blame). Report findings; the orchestrator routes fixes to the original coder."
     fi
-    if printf '%s' "$cmd" | grep -qE '(^|[[:space:]({])bd[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(update|close|done|create|dep|label|delete|defer|supersede|human)\b'; then
+    if printf '%s' "$code" | grep -qE '(^|[[:space:]({])bd[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(update|close|done|create|dep|label|delete|defer|supersede|human)\b'; then
       deny "BLOCKED: the auditor does not write to the tracker. Put findings in your final report; the orchestrator records them (in the bead, or as new beads for out-of-scope findings)."
     fi
-    if bash_writes "$cmd"; then
+    if bash_writes "$code"; then
       deny "BLOCKED: the auditor changes nothing in the repository — no redirections, tee, sed -i, cp/mv/rm/touch. Run tests and read code; report what you find."
     fi
     ;;

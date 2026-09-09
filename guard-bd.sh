@@ -20,7 +20,11 @@ set -uo pipefail
 
 read_payload
 [ -z "$cmd" ] && exit 0
-printf '%s' "$cmd" | grep -qE '(^|[;&|(){}[:space:]])bd([[:space:]]|$)' || exit 0
+# Match on the command with heredoc bodies and quoted prose removed, so a note that
+# says "never use --notes" is not a use of --notes. Double-quoted strings holding a
+# $(...) are kept: they are code, and rule 2 needs to see them.
+code="$(strip_literals "$cmd")"
+printf '%s' "$code" | grep -qE '(^|[;&|(){}[:space:]])bd([[:space:]]|$)' || exit 0
 
 while IFS= read -r seg; do
   printf '%s' "$seg" | grep -qE '(^|[[:space:]({])bd([[:space:]]|$)' || continue
@@ -59,6 +63,6 @@ while IFS= read -r seg; do
       fi
       ;;
   esac
-done < <(split_segments "$cmd")
+done < <(split_segments "$code")
 
 exit 0

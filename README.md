@@ -253,3 +253,8 @@ verification logic are tracker-independent.
   out of a fenced document. The scripts build the fence at runtime.
 - **The hook payload's `cwd` is the checkout the hooks reason about.** Commands of the form
   `git -C <elsewhere> ...` are only partially handled.
+- **Guards match on the command with its prose removed.** Heredoc bodies and quoted strings are
+  stripped before any rule is checked, so a commit message saying "clean up" or a bead note saying
+  "avoided git stash" is not a `git clean` or a `git stash`. Double-quoted strings holding a `$(...)`
+  are kept, since they are code. The accepted gap: a command hidden in a quoted string, such as
+  `bash -c "git stash"`, passes. The commit-message and artifacts-block validators read the full text.

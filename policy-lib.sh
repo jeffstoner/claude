@@ -106,6 +106,51 @@ default_branch() {
 looks_like_default() { printf '%s' "$1" | grep -qxE 'main|master|trunk|develop'; }
 
 # ---- shell command helpers ---------------------------------------------------
+# strip_literals "<command>": the command with its prose removed -- heredoc bodies
+# dropped, single-quoted strings emptied, double-quoted strings emptied unless they
+# contain a command substitution (those are still code). Guards match on THIS, so a
+# commit message or bead note that mentions "stash" or "clean up" is not a git
+# stash or a git clean. Content validators (the commit-message parser, the
+# artifacts-block gate) keep reading the full text. Known gap, accepted: a command
+# hidden in a quoted string (bash -c "git stash") passes.
+strip_literals() {
+  printf '%s\n' "$1" | awk '
+    # Quote state persists across lines: a double-quoted "$(cat <<EOF ... EOF\n)" spans
+    # the heredoc. q = 0 none, 1 in single quotes, 2 in double quotes (prose, drop),
+    # 3 in double quotes holding a substitution (code, keep).
+    function strip(line,   out, i, c, n, j, seg) {
+      out = ""; n = length(line); i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (q == 1) { j = index(substr(line, i), "\047"); if (j == 0) return out; out = out "\047"; i += j; q = 0; continue }
+        if (q == 2 || q == 3) {
+          j = index(substr(line, i), "\"")
+          seg = (j == 0) ? substr(line, i) : substr(line, i, j - 1)
+          if (q == 3) out = out seg
+          if (j == 0) return out
+          out = out "\""; i += j; q = 0; continue
+        }
+        if (c == "\047") { out = out "\047"; q = 1; i++; continue }
+        if (c == "\"") {
+          j = index(substr(line, i + 1), "\"")
+          seg = (j == 0) ? substr(line, i + 1) : substr(line, i + 1, j - 1)
+          q = (index(seg, "$(") || index(seg, "`")) ? 3 : 2
+          out = out "\""; i++; continue
+        }
+        out = out c; i++
+      }
+      return out
+    }
+    inb && $0 ~ ("^[[:space:]]*" tag "[[:space:]]*$") { inb = 0; print; next }
+    inb { next }
+    {
+      if (match($0, /<<-?[[:space:]]*[\047"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+        tag = substr($0, RSTART, RLENGTH); sub(/^<<-?[[:space:]]*[\047"]?/, "", tag); inb = 1
+      }
+      print strip($0)
+    }'
+}
+
 # Split a compound shell command into segments on && || ; | and newlines. Crude:
 # quoted separators are split too. Good enough for policy checks; the commit
 # message parser reads the whole command instead.
