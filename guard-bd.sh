@@ -31,7 +31,7 @@ while IFS= read -r seg; do
   case "$sub" in
     update)
       if printf '%s' "$seg" | grep -qE '(^|[[:space:]])--notes([=[:space:]]|$)'; then
-        deny "BLOCKED: 'bd update --notes' REPLACES the whole notes field, destroying every other agent's findings. Use 'bd update <id> --append-notes \"...\"' (or --append-notes-file <path>) which appends. The same class of loss as a bad stash, in the tracker instead of the tree."
+        deny "BLOCKED: 'bd update --notes' REPLACES the whole notes field, destroying every other agent's findings. Use 'bd update <id> --append-notes \"...\"' which appends. The same class of loss as a bad stash, in the tracker instead of the tree."
       fi
       if printf '%s' "$seg" | grep -qE '(^|[[:space:]])--status[=[:space:]]+closed([[:space:]]|$)'; then
         if is_subagent; then
