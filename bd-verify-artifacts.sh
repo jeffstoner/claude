@@ -15,6 +15,10 @@
 #                  may not be committed yet: a close-time gate, or a per-subagent
 #                  check mid-session.
 #
+# --text-file <path> verify the artifacts block found in that file instead of
+#                  asking the tracker. Used when tracking is off and the block
+#                  lives in a commit message body.
+#
 # With issue ids: checks those, open or closed.
 # With none: sweeps every CLOSED issue in one `bd list --json` call (~1.5s/114
 # issues). Open-but-reported-done work is NOT swept -- name it explicitly.
@@ -44,8 +48,14 @@
 #            refactors and deletions are checkable in the same pass.
 set -uo pipefail
 
-ref="HEAD"
-[ "${1:-}" = "--ref" ] && { ref="$2"; shift 2; }
+ref="HEAD"; textfile=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ref)       ref="$2"; shift 2 ;;
+    --text-file) textfile="$2"; shift 2 ;;   # verify a block held in a file (e.g. a commit body)
+    *) break ;;
+  esac
+done
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "not a git repo" >&2; exit 0; }
 command -v jq >/dev/null 2>&1 || { echo "jq required" >&2; exit 0; }
@@ -88,7 +98,9 @@ extract_artifacts() {
   done
 }
 
-if [ "$#" -eq 0 ]; then
+if [ -n "$textfile" ]; then
+  gathered="$(jq -nc --arg id "$(basename "$textfile")" --rawfile t "$textfile" '{id:$id, text:$t}' 2>/dev/null)"
+elif [ "$#" -eq 0 ]; then
   gathered="$(bd list --status=closed --json 2>/dev/null \
     | jq -c '.[] | {id, text: ((.close_reason // "") + "\n" + (.notes // ""))}' 2>/dev/null)"
 else

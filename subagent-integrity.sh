@@ -1,83 +1,134 @@
 #!/usr/bin/env bash
 # ~/.claude/hooks/subagent-integrity.sh  start|stop
 #
-# Early warning for a specific failure: a subagent reports success while having
-# changed nothing in the repository.
+# Two checks on subagents, both keyed on the payload's agent_type:
 #
-#   SubagentStart -> snapshot (HEAD sha + hash of `git status --porcelain`)
-#   SubagentStop  -> re-snapshot; if identical, emit a systemMessage carrying the
-#                    agent's own final message so the orchestrator can judge at a
-#                    glance whether the claim needs verifying.
+# A. ARTIFACTS GATE (coder, tester) -- on stop, the agent must have recorded an
+#    artifacts JSON block for its issue, and every claim in it must be true on
+#    disk (bd-verify-artifacts.sh --ref worktree). Otherwise the stop is BLOCKED
+#    with the reason, so the author fixes it while its context is intact. This
+#    upgrades "a claim was written" to "the claim is true", and mechanizes the
+#    tracking-off rule too: with no .beads/, the block is read from the last
+#    commit's body. Escape hatch: a final message beginning "ESCALATION:" (the
+#    10-attempt limit, a false premise, foreign uncommitted changes) passes.
+#    stop_hook_active is honoured, so the gate blocks at most once.
 #
-# Always exits 0 and never blocks. A hook that can break a session is worse than
-# the problem it guards.
+# B. ZERO-DELTA WARNING (everything else) -- snapshot HEAD + `git status
+#    --porcelain` at start, compare at stop; identical means the agent changed
+#    nothing, and its success report needs verifying. Read-only agent types
+#    (auditor, Explore, Plan, ...) are skipped: zero delta is their correct
+#    behaviour, and warning on them was the documented false positive.
 #
-# PAYLOAD FIELDS, confirmed by probe 2026-08-27 (not guessed):
+# Always exits 0 and never breaks a session.
+#
+# PAYLOAD FIELDS, confirmed by probe (2026-08-27, re-confirmed 2026-09-08):
 #   SubagentStart: agent_id, agent_type, cwd, hook_event_name, prompt_id,
 #                  session_id, transcript_path
-#   SubagentStop:  the above + agent_transcript_path, background_tasks,
-#                  last_assistant_message, permission_mode, session_crons,
-#                  stop_hook_active
-# `agent_id` is identical across START and STOP for a given subagent, so it is the
-# pairing key. `session_id` is shared by EVERY subagent and must not be used.
+#   SubagentStop:  the above + agent_transcript_path, last_assistant_message,
+#                  permission_mode, stop_hook_active
+# `agent_id` pairs START with STOP; `session_id` is shared by every subagent.
 #
-# KNOWN FALSE POSITIVE: read-only agents (audits, reviews, forensics) are supposed
-# to produce no delta. The message is phrased as "verify", not "failed", and quotes
-# the agent's own words so the call is instant. CLAUDE_SKIP_SUBAGENT_INTEGRITY=1
-# silences it; CLAUDE_SUBAGENT_INTEGRITY_TRUST_DISCLAIMERS=1 suppresses only when
-# the agent explicitly said it changed nothing.
-#
-# KNOWN FALSE NEGATIVE: in a shared checkout a concurrent agent's changes mask this
-# agent's inactivity, because `git status` is tree-wide. Reliable only with one
-# worktree per agent, or serialized agents.
+# KNOWN FALSE NEGATIVE (B): in a shared checkout a concurrent agent's changes mask
+# this agent's inactivity. Reliable only with one worktree per agent.
 set -uo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/policy-lib.sh"
 
 mode="${1:-stop}"
 [ "${CLAUDE_SKIP_SUBAGENT_INTEGRITY:-0}" = "1" ] && exit 0
 
-payload="$(cat 2>/dev/null || true)"
+read_payload
 [ -z "$payload" ] && exit 0
+id="${agent_id:-unknown}"; atype="${agent_type:-unknown}"
+last="$(printf '%s' "$payload" | jq -r '.last_assistant_message // ""' 2>/dev/null | tr '\n' ' ' | cut -c1-240)"
 
-id="$(printf '%s' "$payload" | jq -r '.agent_id // "unknown"' 2>/dev/null || echo unknown)"
-atype="$(printf '%s' "$payload" | jq -r '.agent_type // "unknown"' 2>/dev/null || echo unknown)"
-last="$(printf '%s' "$payload" | jq -r '.last_assistant_message // ""' 2>/dev/null || echo '')"
-last="$(printf '%s' "$last" | tr '' ' ' | cut -c1-240)"
-[ -z "$id" ] && id="unknown"
-[ -z "$atype" ] && atype="unknown"
-    
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
-root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+case "$atype" in auditor|Explore|Plan|claude-code-guide|statusline-setup) exit 0 ;; esac
+
+in_repo || exit 0
+root="$(repo_root)" || exit 0
 
 dir="${TMPDIR:-/tmp}/claude-subagent-integrity"
 mkdir -p "$dir" 2>/dev/null || exit 0
-# Key on repo + agent_id so two repos, or two concurrent subagents, cannot collide.
 key="$(printf '%s|%s' "$root" "$id" | sha256sum | cut -c1-32)"
 f="$dir/$key"
 
 snapshot() {
-  local head status
-  head="$(git rev-parse HEAD 2>/dev/null || echo none)"
-  # --porcelain includes untracked files, which is essential: new test files are
-  # untracked until committed, so "wrote only new files" must count as work.
-  status="$(git status --porcelain 2>/dev/null | sha256sum | cut -d' ' -f1)"
-  printf '%s %s' "$head" "$status"
+  printf '%s %s' "$(git -C "$root" rev-parse HEAD 2>/dev/null || echo none)" \
+    "$(git -C "$root" status --porcelain 2>/dev/null | sha256sum | cut -d' ' -f1)"
+}
+block_stop() {
+  jq -nc --arg r "$1" '{decision:"block", reason:$r}'
+  exit 0
+}
+
+# ---- A. artifacts gate ----------------------------------------------------------
+artifacts_gate() {
+  case "$atype" in coder|tester) ;; *) return 0 ;; esac
+  [ "$(printf '%s' "$payload" | jq -r '.stop_hook_active // false')" = "true" ] && return 0
+  printf '%s' "$last" | grep -qE '^[[:space:]]*ESCALATION:' && return 0
+  verifier="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bd-verify-artifacts.sh"
+  [ -x "$verifier" ] || return 0
+
+  # Which issue? Most-used bead id in the agent's own transcript, else the scope
+  # of the last commit (type(id): ...). Under isolation:worktree the branch name is
+  # harness-generated, so it is not a reliable source.
+  transcript="$(printf '%s' "$payload" | jq -r '.agent_transcript_path // ""')"
+  issue=""
+  if [ -r "$transcript" ]; then
+    issue="$(grep -oE 'bd (show|update|close) +[A-Za-z][A-Za-z0-9]*-[0-9A-Za-z.]+' "$transcript" 2>/dev/null \
+      | awk '{print $3}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')"
+  fi
+  # Which checkout? The worktree whose last commit is scoped to the issue, else root.
+  wt="$root"
+  while IFS= read -r w; do
+    [ -d "$w" ] || continue
+    s="$(git -C "$w" log -1 --format=%s 2>/dev/null)"
+    if { [ -n "$issue" ] && printf '%s' "$s" | grep -qF "($issue)"; }; then wt="$w"; break; fi
+  done < <(git -C "$root" worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
+  if [ -z "$issue" ]; then
+    issue="$(git -C "$wt" log -1 --format=%s 2>/dev/null | sed -nE 's/^[a-z]+\(([^)]+)\)!?:.*/\1/p')"
+    [ "$issue" = "NOTICKET" ] && issue=""
+  fi
+
+  if [ -d "$root/.beads" ] && ! policy_has "no issue tracker"; then
+    if [ -z "$issue" ]; then
+      block_stop "STOP BLOCKED ($atype): could not determine which issue you worked on. Run 'bd show <id>' for your issue, then 'bd update <id> --append-notes-file <path>' with a description of the work for human review ending in the fenced json artifacts block, then stop. If you are stopping WITHOUT completing the task, begin your final message with 'ESCALATION:' and say why."
+    fi
+    out="$(cd "$wt" && "$verifier" --ref worktree "$issue" 2>&1)"; rc=$?
+    where="issue $issue's notes"
+  else
+    body="$(git -C "$wt" log -1 --format=%B 2>/dev/null)"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/claude-artifacts.XXXXXX")"; printf '%s\n' "$body" > "$tmp"
+    out="$(cd "$wt" && "$verifier" --ref worktree --text-file "$tmp" 2>&1)"; rc=$?
+    rm -f "$tmp"
+    where="the last commit's message body (issue tracking is off, so the block lives there)"
+  fi
+
+  if printf '%s' "$out" | grep -qE 'no issues found|not a git repo|jq required'; then
+    block_stop "STOP BLOCKED ($atype): could not read issue $issue from the tracker to verify your artifacts block ($out). Confirm the issue id, make sure 'bd show $issue' works from your worktree, and that your notes carry the artifacts block. If stopping without completing, begin your final message with 'ESCALATION:'."
+  fi
+  if printf '%s' "$out" | grep -qE '(^| )[1-9][0-9]* without a block'; then
+    block_stop "STOP BLOCKED ($atype): no artifacts block found in $where. Before stopping, record a description of the work for human review ending in a fenced json block:
+{\"artifacts\":[{\"path\":\"<repo-relative>\",\"symbols\":[\"<greppable token>\"]},{\"path\":\"<test file>\",\"symbols\":[]}]}
+(symbols defaults to [] = file exists; state \"removed\" asserts deletion.) With beads: 'bd update <id> --append-notes-file <path>' (never --notes). Without beads: put it in the commit body and amend on your task branch. If you are stopping WITHOUT completing the task, begin your final message with 'ESCALATION:' and say why."
+  fi
+  if [ "$rc" -ne 0 ]; then
+    block_stop "STOP BLOCKED ($atype): the artifacts block in $where claims code that is not on disk:
+$out
+Either the work is not there (check 'git status', commit it) or the claim is wrong (correct the block). Fix it now, while you still know which. If stopping without completing, begin your final message with 'ESCALATION:'."
+  fi
+  return 0
 }
 
 case "$mode" in
   start)
     snapshot > "$f" 2>/dev/null
-    exit 0
-    ;;
-
+    exit 0 ;;
   stop)
+    artifacts_gate
+    # ---- B. zero-delta warning ----
     [ -f "$f" ] || exit 0                # no baseline (hook added mid-session) -> quiet
-    before="$(cat "$f" 2>/dev/null)"
-    after="$(snapshot)"
-    rm -f "$f" 2>/dev/null
+    before="$(cat "$f" 2>/dev/null)"; after="$(snapshot)"; rm -f "$f" 2>/dev/null
     [ "$before" = "$after" ] || exit 0   # something changed -> nothing to say
-
-    # Optional noise reduction, OFF by default: warn-unless-disclaimed is the safe
-    # direction, so this only helps once the read-only-agent noise proves annoying.
     if [ "${CLAUDE_SUBAGENT_INTEGRITY_TRUST_DISCLAIMERS:-0}" = "1" ] \
        && printf '%s' "$last" | grep -qiE 'no (files|changes|repo|repository|code) (were |was )?(modified|changed|touched)|read-only|report only|made no changes'; then
       exit 0
@@ -86,14 +137,9 @@ case "$mode" in
       systemMessage: ("⚠ Subagent " + $id + " (" + $atype
         + ") stopped with ZERO repository delta in " + $root
         + " -- no commit, no working-tree change, no new untracked file.
-Its final message began: \""
-        + $last
-        + "\"
-If that was a read-only agent (audit, review, forensics) this is expected. If it claims to have done work, VERIFY BEFORE TRUSTING IT: grep for the symbols its report names. An agent that reports work it did not do is the signature of work lost to a bad tree operation, or of a report that was never grounded in the code."),
-      suppressOutput: true
-    }'
-    exit 0
-    ;;
-
+Its final message began: \"" + $last + "\"
+If that was a read-only task this is expected. If it claims to have done work, VERIFY BEFORE TRUSTING IT: grep for the symbols its report names. An agent that reports work it did not do is the signature of work lost to a bad tree operation, or of a report that was never grounded in the code."),
+      suppressOutput: true }'
+    exit 0 ;;
   *) exit 0 ;;
 esac

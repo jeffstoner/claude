@@ -9,7 +9,7 @@ set -uo pipefail
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 command -v bd >/dev/null 2>&1 || exit 0
 
-verifier="$HOME/.claude/hooks/bd-verify-artifacts.sh"
+verifier="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bd-verify-artifacts.sh"
 [ -x "$verifier" ] || exit 0
 
 out="$("$verifier" --ref HEAD 2>&1)" && exit 0   # exit 0 from verifier = nothing missing

@@ -8,7 +8,8 @@
 # author is still present, instead of surfacing in the session-close sweep.
 set -uo pipefail
 
-cmd="$(jq -r '.tool_input.command // empty' 2>/dev/null)" || exit 0
+payload="$(cat 2>/dev/null || true)"
+cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)" || exit 0
 [ -z "$cmd" ] && exit 0
 # Defensive: settings gates this with `if: Bash(bd close *)`, but never act on
 # anything that is not a bd close.
@@ -38,20 +39,29 @@ session-close integrity check possible -- a prose-only close-reason cannot be
 verified, which is how work silently goes missing. Tip: use
 'bd close <id> --reason-file <path>' so you never have to shell-escape the JSON."
 
-# --reason-file/- defers the text to a file or stdin; allow it and let the
-# session-close sweep catch a missing block rather than resolving the file here.
-printf '%s' "$cmd" | grep -qE '\-\-reason-file' && exit 0
+# --reason-file <path>: validate the file's content when it is readable from the
+# hook's cwd. `-` (stdin) or an unreadable path is allowed through and left to
+# the session-close sweep.
+text="$cmd"
+rf="$(printf '%s' "$cmd" | grep -oE -- '--reason-file[[:space:]=]+[^[:space:]]+' | head -1 | sed -E 's/^--reason-file[[:space:]=]+//; s/^["\x27]//; s/["\x27]$//')"
+if [ -n "$rf" ]; then
+  [ "$rf" = "-" ] && exit 0
+  cwd="$(printf '%s' "$payload" | jq -r '.cwd // empty' 2>/dev/null)"; [ -d "${cwd:-}" ] || cwd="$PWD"
+  [ "${rf#/}" = "$rf" ] && rf="$cwd/$rf"
+  [ -r "$rf" ] || exit 0
+  text="$(cat "$rf")"
+fi
 
-# Pull the json block out of the command text and actually parse it.
+# Pull the json block out of the text and actually parse it.
 # Same awk fence-extraction as bd-verify-artifacts.sh -- one parser, not two.
-blk="$(printf '%s\n' "$cmd" | awk -v F="$FENCE" '
+blk="$(printf '%s\n' "$text" | awk -v F="$FENCE" '
   $0 ~ F "[[:space:]]*json[[:space:]]*$" { inb=1; next }
   inb && index($0, F)                    { exit }
   inb                                    { print }
 ')"
 
 if [ -z "$blk" ]; then
-  deny "BLOCKED: no fenced json artifacts block found in --reason.
+  deny "BLOCKED: no fenced json artifacts block found in the close reason.
 
 $GUIDE"
 fi
