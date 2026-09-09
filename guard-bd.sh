@@ -24,7 +24,9 @@ printf '%s' "$cmd" | grep -qE '(^|[;&|(){}[:space:]])bd([[:space:]]|$)' || exit 
 
 while IFS= read -r seg; do
   printf '%s' "$seg" | grep -qE '(^|[[:space:]({])bd([[:space:]]|$)' || continue
-  sub="$(printf '%s' "$seg" | sed -E 's/^.*[[:space:]({]bd[[:space:]]+//; s/^bd[[:space:]]+//' | awk '{for(i=1;i<=NF;i++) if ($i !~ /^-/) {print $i; exit}}')"
+  # Subcommand = first non-option word after the FIRST `bd` token. Anchoring on the
+  # first, not the last, matters: `bd update x --notes "$(bd show y)"` must read as update.
+  sub="$(printf '%s' "$seg" | awk '{for(i=1;i<=NF;i++){ if(!s){ if($i=="bd"||$i~/[({]bd$/) s=1; continue } if($i !~ /^-/){print $i; exit} }}')"
 
   case "$sub" in
     update)

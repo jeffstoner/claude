@@ -34,7 +34,11 @@ rel="$file"; [ -n "$file" ] && rel="${file#"$root"/}"
 
 # ---- test-path classification -----------------------------------------------
 TEST_RE='(^|/)(tests?|__tests__|spec|fixtures|testdata)/|(^|/)test_[^/]+\.py$|_test\.(go|py|rs|ts|js|c|cc|cpp)$|\.(spec|test)\.[cm]?[jt]sx?$|Tests?\.(java|cs|kt|scala|swift)$|(^|/)conftest\.py$|(^|/)test_[^/]+\.(sh|bash)$'
-glob_to_re() { printf '%s' "$1" | sed -E 's/[.+^$(){}|]/\\&/g; s/\*\*\//(.*\/)?/g; s/\*\*/.*/g; s/\*/[^\/]*/g; s/\?/./g'; }
+# Glob -> ERE. Placeholders keep later substitutions from rewriting earlier output
+# (`**/` -> `(.*/)?` contains `?`, `.` and `*`, which the following steps would mangle).
+glob_to_re() {
+  printf '%s' "$1" | sed -E 's/[.+^$(){}|]/\\&/g; s/\*\*\//\x01/g; s/\*\*/\x02/g; s/\*/[^\/]*/g; s/\?/./g; s/\x01/(.*\/)?/g; s/\x02/.*/g'
+}
 is_test_path() {
   local p="$1" g
   printf '%s' "$p" | grep -qE "$TEST_RE" && return 0
