@@ -95,6 +95,15 @@ g "cc: heredoc ! without footer" deny $'git commit -m "$(cat <<\'EOF\'\nfeat(gg-
 g "cc: heredoc ! with footer" allow $'git commit -m "$(cat <<\'EOF\'\nfeat(gg-1)!: x\n\nbody\n\nBREAKING CHANGE: api\nEOF\n)"'
 g "cc: amend --no-edit" allow 'git commit --amend --no-edit'
 g "cc: unknown type" deny 'git commit -m "wip(gg-1): x"'
+g "literal: subject mentions refactor" allow 'git commit -m "refactor(gg-9): clean up imports"'
+g "literal: subject mentions push" allow 'git commit -m "feat(gg-9): add push notifications"'
+g "literal: heredoc body mentions stash" allow $'git commit -F - <<\'EOF\'\ntest(gg-9): cover shelving\n\nReplaces the old stash-based flow.\nEOF'
+g "literal: heredoc body mentions checkout" allow $'git commit -F - <<\'EOF\'\nfix(gg-9): tidy\n\nThe checkout page now loads.\nEOF'
+g "literal: subagent heredoc body mentions git merge" allow $'git commit -F - <<\'EOF\'\nfeat(gg-9): x\n\nThis runs before git merge happens.\nEOF' coder
+g "literal: heredoc body mentions -f" allow $'git commit -F - <<\'EOF\'\nfix(gg-9): x\n\nDrop the -f flag from rm.\nEOF'
+g "literal: bd note mentions git stash" allow $'bd update gg-9 --append-notes "$(cat <<\'EOF\'\nAvoided git stash per the rules.\nEOF\n)"'
+g "literal: real stash after quoted message" deny 'git commit -m "fix(gg-9): x" && git stash'
+g "literal: real stash after quoted heredoc" deny $'bd update gg-9 --append-notes "$(cat <<\'EOF\'\nnote\nEOF\n)" && git stash'
 git -C "$R" switch -q --detach
 g "commit on detached HEAD" deny 'git commit -m "feat(gg-1): x"'
 
@@ -112,6 +121,8 @@ b "edit" deny 'bd edit gg-1'
 b "label add human" ask 'bd label add gg-1 human'
 b "show" allow 'bd show gg-1'
 b "echo bd --notes" allow 'echo bd --notes'
+b "literal: append-notes heredoc mentions --notes" allow $'bd update gg-9 --append-notes "$(cat <<\'EOF\'\nNever use --notes; it replaces.\nEOF\n)"'
+b "literal: nested bd show in double quotes still visible" deny 'bd update gg-9 --design="$(bd show gg-1 --json)"'
 
 # ---- guard-edit.sh -------------------------------------------------------------
 R="$(mkrepo edit)"; mkdir -p "$R/src" "$R/tests"; : > "$R/src/mod.py"; : > "$R/tests/test_mod.py"
@@ -129,6 +140,8 @@ e coder "write _test.go" deny "$(pwrite "$R" "$R/pkg/foo_test.go" x)"
 eb coder "redirect into tests/" deny 'echo x > tests/test_new.py'
 eb coder "run pytest" allow 'pytest tests/ -q 2>&1 | tail -5'
 eb coder "sed -i test file" deny 'sed -i s/a/b/ tests/test_mod.py'
+e coder "literal: subagent append-notes heredoc mentions tests path" allow "$(pbash "$R" $'bd update gg-9 --append-notes "$(cat <<\'EOF\'\nInput -> output; see tests/test_x.py\nEOF\n)"' coder)"
+e coder "literal: subagent redirect into tests/" deny "$(pbash "$R" 'echo x > tests/test_new.py' coder)"
 O="$TMP/outside/scratch"; mkdir -p "$O"
 e coder "write scratch file outside repo" allow "$(pwrite "$R" "$O/notes.md" x)"
 printf 'Test-paths: src/**/*_spec.rb\n' > "$R/CLAUDE.md"
