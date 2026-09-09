@@ -91,7 +91,7 @@ artifacts_gate() {
 
   if [ -d "$root/.beads" ] && ! policy_has "no issue tracker"; then
     if [ -z "$issue" ]; then
-      block_stop "STOP BLOCKED ($atype): could not determine which issue you worked on. Run 'bd show <id>' for your issue, then 'bd update <id> --append-notes-file <path>' with a description of the work for human review ending in the fenced json artifacts block, then stop. If you are stopping WITHOUT completing the task, begin your final message with 'ESCALATION:' and say why."
+      block_stop "STOP BLOCKED ($atype): could not determine which issue you worked on. Run 'bd show <id>' for your issue, then 'bd update <id> --append-notes \"\$(cat <path>)\"' with a description of the work for human review ending in the fenced json artifacts block, then stop. If you are stopping WITHOUT completing the task, begin your final message with 'ESCALATION:' and say why."
     fi
     out="$(cd "$wt" && "$verifier" --ref worktree "$issue" 2>&1)"; rc=$?
     where="issue $issue's notes"
@@ -109,7 +109,7 @@ artifacts_gate() {
   if printf '%s' "$out" | grep -qE '(^| )[1-9][0-9]* without a block'; then
     block_stop "STOP BLOCKED ($atype): no artifacts block found in $where. Before stopping, record a description of the work for human review ending in a fenced json block:
 {\"artifacts\":[{\"path\":\"<repo-relative>\",\"symbols\":[\"<greppable token>\"]},{\"path\":\"<test file>\",\"symbols\":[]}]}
-(symbols defaults to [] = file exists; state \"removed\" asserts deletion.) With beads: 'bd update <id> --append-notes-file <path>' (never --notes). Without beads: put it in the commit body and amend on your task branch. If you are stopping WITHOUT completing the task, begin your final message with 'ESCALATION:' and say why."
+(symbols defaults to [] = file exists; state \"removed\" asserts deletion.) With beads: 'bd update <id> --append-notes \"\$(cat <path>)\"' (never --notes). Without beads: put it in the commit body and amend on your task branch. If you are stopping WITHOUT completing the task, begin your final message with 'ESCALATION:' and say why."
   fi
   if [ "$rc" -ne 0 ]; then
     block_stop "STOP BLOCKED ($atype): the artifacts block in $where claims code that is not on disk:

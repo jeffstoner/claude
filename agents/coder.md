@@ -56,7 +56,7 @@ test files, no merge, no close, commit format) and explain themselves when they 
 ## Finish
 
 Write the description of your work for human review to a file and append it to the bead, never
-replacing: `bd update <id> --append-notes-file <path>`. It ends with the artifacts block, which the
+replacing: `bd update <id> --append-notes "$(cat <path>)"`. It ends with the artifacts block, which the
 auditor and the stop hook read:
 
 ```json

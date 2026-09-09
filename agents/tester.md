@@ -51,7 +51,7 @@ format) and explain themselves when they fire.
 ## Finish
 
 Append (never replace) a description for human review to the bead:
-`bd update <id> --append-notes-file <path>`, ending in the artifacts block the auditor and the stop
+`bd update <id> --append-notes "$(cat <path>)"`, ending in the artifacts block the auditor and the stop
 hook read:
 
 ```json

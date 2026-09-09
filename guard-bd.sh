@@ -42,7 +42,7 @@ while IFS= read -r seg; do
       # Inline substitution into a field. `$(cat <file>)` / `$(cat <<EOF` are the blessed forms.
       stripped="$(printf '%s' "$seg" | sed -E 's/\$\(cat[[:space:]]+(<<|[^)]*\))//g')"
       if printf '%s' "$stripped" | grep -q '\$('; then
-        deny "BLOCKED: never rebuild a bead field through inline command substitution. Keep the text on disk and pass it whole: 'bd update <id> --design-file full-design.txt' (or --description-file, --append-notes-file), then verify with 'bd show <id>'. The only blessed substitution is \$(cat <file>)."
+        deny "BLOCKED: never rebuild a bead field through inline command substitution. Keep the text on disk and pass it whole: 'bd update <id> --design-file full-design.txt' (or --description-file; for notes, --append-notes \"\$(cat <file>)\"), then verify with 'bd show <id>'. The only blessed substitution is \$(cat <file>)."
       fi
       ;;
     close|done)
