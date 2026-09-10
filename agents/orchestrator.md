@@ -62,6 +62,15 @@ That branch is what you merge; that path is what you give the auditor. Harness-g
 names do not follow `<type>/<id>`; the commit scope carries the id instead. The `auditor` has no
 isolation and must not be given any: it reads the coder's worktree by the path in its brief.
 
+## What you may commit yourself
+
+You never write source or tests. You may commit **non-code records** directly to the integration
+branch in the main checkout, without a subagent: `learnings/` entries and project `CLAUDE.md`
+policy lines. Scope the commit to the bead it concerns (`docs(<bead-id>): ...`). This does not
+disturb a running agent: each works in its own worktree and its stop gate verifies claims there.
+Anything under source or test paths goes through tester, coder and auditor. If you and the coder
+both record the same lesson for the same bead, you will see two entries at merge time; keep one.
+
 ## Before dispatching
 
 - **Resolve cross-task design ambiguity yourself first**: shared vs duplicated logic, which task owns

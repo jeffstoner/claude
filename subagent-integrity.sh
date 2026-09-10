@@ -9,7 +9,8 @@
 #    with the reason, so the author fixes it while its context is intact. This
 #    upgrades "a claim was written" to "the claim is true", and mechanizes the
 #    tracking-off rule too: with no .beads/, the block is read from the last
-#    commit's body. Escape hatch: a final message beginning "ESCALATION:" (the
+#    commit's body. Claims are verified in the agent's OWN worktree (the payload's
+#    cwd), never in another checkout. Escape hatch: a final message beginning "ESCALATION:" (the
 #    10-attempt limit, a false premise, foreign uncommitted changes) passes.
 #    stop_hook_active is honoured, so the gate blocks at most once.
 #
@@ -68,22 +69,22 @@ artifacts_gate() {
   verifier="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bd-verify-artifacts.sh"
   [ -x "$verifier" ] || return 0
 
-  # Which issue? Most-used bead id in the agent's own transcript, else the scope
-  # of the last commit (type(id): ...). Under isolation:worktree the branch name is
-  # harness-generated, so it is not a reliable source.
+  # Which checkout? The agent's own. The payload's cwd IS the agent's worktree
+  # (.claude/worktrees/agent-<agent_id> under isolation: worktree, confirmed by probe
+  # 2026-09-10), and $root is that worktree's top level. Never go looking in other
+  # worktrees: the main checkout may carry a commit scoped to the same issue (the
+  # orchestrator recording a learnings entry for it), and verifying there reported
+  # true claims as MISSING.
+  wt="$root"
+  # Which issue? Most-used bead id in the agent's own transcript, else the scope of
+  # the worktree's last commit (type(id): ...). The harness-generated branch name
+  # carries no id.
   transcript="$(printf '%s' "$payload" | jq -r '.agent_transcript_path // ""')"
   issue=""
   if [ -r "$transcript" ]; then
     issue="$(grep -oE 'bd (show|update|close) +[A-Za-z][A-Za-z0-9]*-[0-9A-Za-z.]+' "$transcript" 2>/dev/null \
       | awk '{print $3}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')"
   fi
-  # Which checkout? The worktree whose last commit is scoped to the issue, else root.
-  wt="$root"
-  while IFS= read -r w; do
-    [ -d "$w" ] || continue
-    s="$(git -C "$w" log -1 --format=%s 2>/dev/null)"
-    if { [ -n "$issue" ] && printf '%s' "$s" | grep -qF "($issue)"; }; then wt="$w"; break; fi
-  done < <(git -C "$root" worktree list --porcelain 2>/dev/null | awk '$1=="worktree"{print $2}')
   if [ -z "$issue" ]; then
     issue="$(git -C "$wt" log -1 --format=%s 2>/dev/null | sed -nE 's/^[a-z]+\(([^)]+)\)!?:.*/\1/p')"
     [ "$issue" = "NOTICKET" ] && issue=""
