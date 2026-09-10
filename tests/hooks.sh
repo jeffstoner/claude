@@ -229,6 +229,22 @@ run "stop: coder, valid block" allow "$(pstop "$S" coder 'Done.' false)" subagen
 sed -i 's/hello_sym/nope_sym/' "$TMP/msg"; git -C "$S" commit -q --amend -F "$TMP/msg"
 run "stop: coder, block names missing symbol" block "$(pstop "$S" coder 'Done.' false)" subagent-integrity.sh stop
 run "stop: auditor skipped" allow "$(pstop "$S" auditor 'Done.' false)" subagent-integrity.sh stop
+# claims are verified in the agent's own worktree (payload cwd), never the main checkout
+W="$(mkrepo stopwt)"; git -C "$W" switch -q -c feat/gg-7
+WT="$W/.claude/worktrees/agent-a9"; git -C "$W" worktree add -q "$WT" -b worktree-agent-a9
+mkdir -p "$WT/src"; printf 'def only_in_worktree(): pass\n' > "$WT/src/gate_only.py"
+printf 'feat(gg-7): add gate_only\n\n%sjson\n{"artifacts":[{"path":"src/gate_only.py","symbols":["only_in_worktree"]}]}\n%s\n' "$F" "$F" > "$TMP/wtmsg"
+git -C "$WT" add -A; git -C "$WT" commit -q -F "$TMP/wtmsg"
+mkdir -p "$W/learnings"; printf '# lesson\n' > "$W/learnings/gg-7-note.md"
+git -C "$W" add learnings; git -C "$W" commit -qm "docs(gg-7): record a lesson"
+run "stop: coder, cwd is own worktree" allow "$(pstop "$WT" coder 'Done.' false)" subagent-integrity.sh stop
+run "stop: coder, cwd is main checkout with same-scoped commit" block "$(pstop "$W" coder 'Done.' false)" subagent-integrity.sh stop
+printf '# more\n' >> "$WT/src/gate_only.py"
+sed -i 's/add gate_only/claim not_there/; s/only_in_worktree/not_there/' "$TMP/wtmsg"
+git -C "$WT" add -A; git -C "$WT" commit -q -F "$TMP/wtmsg"
+out="$(pstop "$WT" coder 'Done.' false | "$HOOKS/subagent-integrity.sh" stop 2>/dev/null)"
+check "stop: coder, worktree block names missing symbol" block "$(printf '%s' "$out" | decide)"
+check "stop: reason names the missing symbol" yes "$(printf '%s' "$out" | jq -r '.reason // ""' | grep -q not_there && echo yes || echo no)"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
