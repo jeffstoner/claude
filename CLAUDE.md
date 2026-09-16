@@ -81,6 +81,12 @@ agent needs to know:
 - **Issue tracker.** A `.beads/` directory means work is tracked in beads: `bd ready`, `bd show <id>`,
   `bd update <id> --append-notes`. No TodoWrite, no checklist files. Never leave a TODO comment:
   file or update an issue with enough context to finish the work, or report it to the user.
+- **Naming code in writing.** Whenever a bead field or an audit report points at code, name it
+  `path/to/file.ext:symbol (~line N)`: the repo-relative path always (never a bare filename -
+  several files share a name), the function, class or method being changed, and the line or range
+  as an advisory hint. Nothing to name inside the file: `path/to/file.ext (whole file)` or
+  `path/to/file.ext (new file)`. Path and symbol are what the next agent greps; the line may
+  already be stale.
 - **Git.** Never work on the default branch; branch `<type>/<issue-id>` from HEAD first. Commit early
   to your branch with Conventional Commits, `type(<issue-id>): subject` (`NOTICKET` when there is no
   issue). Never stash, never discard changes you did not make, never push, pull or force. Merging is

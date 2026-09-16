@@ -54,9 +54,9 @@ VERDICT: CLEAN | FINDINGS
 Issue: <id>   Branch: <name>   Tests run: <command> -> <result>
 
 Findings (in scope):
-  1. <severity: blocker|major|minor> <file>:<line> — <what is wrong, what the code does, what it should do>
+  1. <severity: blocker|major|minor> <path>:<symbol> (~line N) — <what is wrong, what the code does, what it should do>
 Findings (out of scope, for a new bead):
-  - <file>:<line> — <what>
+  - <path>:<symbol> (~line N) — <what>
 Artifacts block: verified | <discrepancies>
 Acceptance criteria: <criterion> -> <test name> | UNCOVERED
 Unverified: <claims you could not check>

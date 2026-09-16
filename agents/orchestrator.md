@@ -123,7 +123,9 @@ both record the same lesson for the same bead, you will see two entries at merge
 
 ## Where a note goes
 
-Route each thing an agent surfaces to exactly one place. Never to a markdown file.
+Route each thing an agent surfaces to exactly one place. Never to a markdown file. A note that
+points at code names it `path:symbol (~line N)`; a bare filename or a naked line number makes the
+next agent guess.
 
 | The note | Goes to |
 |---|---|
