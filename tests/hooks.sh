@@ -270,5 +270,24 @@ out="$(pstop "$WT" coder 'Done.' false | "$HOOKS/subagent-integrity.sh" stop 2>/
 check "stop: coder, worktree block names missing symbol" block "$(printf '%s' "$out" | decide)"
 check "stop: reason names the missing symbol" yes "$(printf '%s' "$out" | jq -r '.reason // ""' | grep -q not_there && echo yes || echo no)"
 
+# the issue id is read from the agent's transcript; a project prefix may itself contain
+# hyphens (pdf-service-jqy), and a truncated id (pdf-service) finds no bead and blocks
+B="$(mkrepo hyphen)"; mkdir -p "$B/.beads" "$B/bin" "$B/src"; printf 'def hello_sym():\n    pass\n' > "$B/src/m.py"
+printf 'note\n%sjson\n{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}]}\n%s\n' "$F" "$F" > "$B/notes.txt"
+printf 'pdf-service-jqy\n' > "$B/want"
+cat > "$B/bin/bd" <<'STUB'
+#!/usr/bin/env bash
+# test stub: answers `bd show <id> --json` for exactly the id in ../want, else nothing
+here="$(cd "$(dirname "$0")/.." && pwd)"
+[ "${1:-}" = show ] && [ "${2:-}" = "$(cat "$here/want")" ] || exit 0
+jq -nc --arg id "$2" --rawfile n "$here/notes.txt" '[{id:$id, notes:$n, close_reason:""}]'
+STUB
+chmod +x "$B/bin/bd"
+printf 'bd show pdf-service-jqy\nbd update pdf-service-jqy --append-notes x\n' > "$B/transcript"
+ptx() { jq -nc --arg cwd "$1" --arg tp "$2" \
+  '{cwd:$cwd,agent_id:"a9",agent_type:"coder",last_assistant_message:"Done.",stop_hook_active:false,agent_transcript_path:$tp}'; }
+out="$(ptx "$B" "$B/transcript" | PATH="$B/bin:$PATH" "$HOOKS/subagent-integrity.sh" stop 2>/dev/null)"
+check "stop: hyphenated project prefix in bead id" allow "$(printf '%s' "$out" | decide)"
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
