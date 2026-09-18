@@ -82,7 +82,9 @@ artifacts_gate() {
   transcript="$(printf '%s' "$payload" | jq -r '.agent_transcript_path // ""')"
   issue=""
   if [ -r "$transcript" ]; then
-    issue="$(grep -oE 'bd (show|update|close) +[A-Za-z][A-Za-z0-9]*-[0-9A-Za-z.]+' "$transcript" 2>/dev/null \
+    # The trailing class admits '-': a project prefix may itself be hyphenated
+    # (pdf-service-jqy), and stopping at the second hyphen truncated the id.
+    issue="$(grep -oE 'bd (show|update|close) +[A-Za-z][A-Za-z0-9]*-[0-9A-Za-z.-]+' "$transcript" 2>/dev/null \
       | awk '{print $3}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')"
   fi
   if [ -z "$issue" ]; then
