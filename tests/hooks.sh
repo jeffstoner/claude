@@ -216,6 +216,30 @@ check "verify: existing symbol exits 0" 0 "$rc"
 out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$V/bad.txt")"; rc=$?
 check "verify: missing symbol exits 1" 1 "$rc"
 check "verify: missing symbol reports MISSING" yes "$(printf '%s' "$out" | grep -q MISSING && echo yes || echo no)"
+# several blocks (a resumed agent appends another) are folded in order: every claim
+# is checked, and the last record for a path+symbol wins
+vt() { # name expected-rc block1-json block2-json [grep-pattern]
+  printf 'first\n%sjson\n%s\n%s\nsecond\n%sjson\n%s\n%s\n' "$F" "$3" "$F" "$F" "$4" "$F" > "$V/multi.txt"
+  out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$V/multi.txt")"; rc=$?
+  check "verify: $1" "$2" "$rc"
+  [ -n "${5:-}" ] && check "verify: $1 reports $5" yes "$(printf '%s' "$out" | grep -q "$5" && echo yes || echo no)"
+}
+printf 'def other_sym():\n    pass\n' > "$V/src/n.py"
+vt "two blocks, both checked" 0 \
+  '{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}]}' \
+  '{"artifacts":[{"path":"src/n.py","symbols":["other_sym"]}]}' '2 claim(s) checked'
+vt "earlier claim not restated is still checked" 1 \
+  '{"artifacts":[{"path":"src/m.py","symbols":["gone_sym"]}]}' \
+  '{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}]}' 'MISSING.*gone_sym'
+vt "later removed record overrides earlier present" 0 \
+  '{"artifacts":[{"path":"src/m.py","symbols":["gone_sym"]}]}' \
+  '{"artifacts":[{"path":"src/m.py","symbols":["gone_sym"],"state":"removed"},{"path":"src/m.py","symbols":["hello_sym"]}]}'
+vt "later present record overrides earlier removed" 0 \
+  '{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"],"state":"removed"}]}' \
+  '{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}]}'
+vt "malformed block ahead of a good one" 1 \
+  '{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}' \
+  '{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}]}' 'MALFORMED'
 
 # ---- subagent-integrity.sh stop ------------------------------------------------
 S="$(mkrepo stop)"; mkdir -p "$S/src"; printf 'def hello_sym():\n    pass\n' > "$S/src/m.py"
