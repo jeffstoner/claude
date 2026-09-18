@@ -46,6 +46,10 @@
 #   symbols  optional, default []. Empty asserts only that the file exists.
 #   state    optional, default "present". Use "removed" to assert deletion, so
 #            refactors and deletions are checkable in the same pass.
+#
+# Notes may hold several blocks (the tester's, the coder's, a resumed coder's).
+# All are folded in order; the last record for a path+symbol wins. See
+# extract_artifacts.
 set -uo pipefail
 
 ref="HEAD"; textfile=""
@@ -77,9 +81,14 @@ fi
 # Built, not literal, so this file contains no triple-backtick (see NOTE above).
 FENCE="$(printf '%0.s`' 1 2 3)"
 
-# Emit NDJSON {path,symbols,state} for the first fenced json block carrying "artifacts".
+# Emit NDJSON {path,symbols,state} folded from EVERY fenced json block carrying
+# "artifacts", in text order. Notes are append-only, so a resumed agent adds a
+# second block rather than editing the first; the claim set is the fold of them
+# all: every record is checked, and the LAST record for a path+symbol pair wins,
+# which is how a rename between attempts is written (old symbol "removed", new
+# one present). Returns 2 if any block carrying "artifacts" fails to parse.
 extract_artifacts() {
-  local text n i blk
+  local text n i blk blocks="" bad=0
   text="$(cat)"
   n=$(printf '%s\n' "$text" | grep -cE "^[[:space:]]*${FENCE}[[:space:]]*json" || true)
   i=0
@@ -90,25 +99,38 @@ extract_artifacts() {
       inb && $0 ~ "^[[:space:]]*" F "[[:space:]]*$" { exit }
       inb { print }
     ')"
-    printf '%s' "$blk" | jq -e 'has("artifacts")' >/dev/null 2>&1 || continue
-    printf '%s' "$blk" | jq -c '.artifacts[] | {
-      path: .path, symbols: (.symbols // []), state: (.state // "present")
-    }' 2>/dev/null
-    return 0
+    printf '%s' "$blk" | grep -q '"artifacts"' || continue
+    if ! printf '%s' "$blk" | jq -e 'has("artifacts") and (.artifacts | type == "array")' >/dev/null 2>&1; then
+      bad=1; continue
+    fi
+    blocks+="$(printf '%s' "$blk" | jq -c '.')"$'\n'
   done
+  [ "$bad" -eq 1 ] && return 2
+  [ -z "$blocks" ] && return 0
+  # One row per path+symbol ("" = the file-exists claim), indexed so the fold keeps
+  # the latest; group_by sorts, so the index, not position, decides the winner.
+  printf '%s' "$blocks" | jq -sc '
+    [ .[] | .artifacts[] | {path, symbols: (.symbols // []), state: (.state // "present")}
+      | . as $r | (if ($r.symbols | length) == 0 then [""] else $r.symbols end)[]
+      | {path: $r.path, sym: ., state: $r.state} ]
+    | to_entries | map(.value + {i: .key})
+    | group_by([.path, .sym]) | map(max_by(.i))
+    | .[] | {path, symbols: (if .sym == "" then [] else [.sym] end), state}'
 }
 
 if [ -n "$textfile" ]; then
   gathered="$(jq -nc --arg id "$(basename "$textfile")" --rawfile t "$textfile" '{id:$id, text:$t}' 2>/dev/null)"
 elif [ "$#" -eq 0 ]; then
   gathered="$(bd list --status=closed --json 2>/dev/null \
-    | jq -c '.[] | {id, text: ((.close_reason // "") + "\n" + (.notes // ""))}' 2>/dev/null)"
+    | jq -c '.[] | {id, text: ((.notes // "") + "\n" + (.close_reason // ""))}' 2>/dev/null)"
 else
   gathered="$(for id in "$@"; do
     bd show "$id" --json 2>/dev/null \
-      | jq -c '.[0] | {id, text: ((.close_reason // "") + "\n" + (.notes // ""))}' 2>/dev/null
+      | jq -c '.[0] | {id, text: ((.notes // "") + "\n" + (.close_reason // ""))}' 2>/dev/null
   done)"
 fi
+# Notes first, close-reason last: the fold in extract_artifacts is chronological, and
+# the close-reason is written after every note.
 [ -z "$gathered" ] && { echo "no issues found"; exit 0; }
 
 fail=0 checked=0 noblock=0 seen=0 malformed=0
@@ -119,21 +141,18 @@ while IFS= read -r row; do
   text="$(printf '%s' "$row" | jq -r '.text')"
   seen=$((seen+1))
 
-  records="$(printf '%s' "$text" | extract_artifacts)"
+  records="$(printf '%s' "$text" | extract_artifacts)"; erc=$?
+  # Distinguish "no block" from "block present but unparseable" -- a malformed
+  # block that read as absent is how a checker silently passes. One bad block
+  # among good ones is still MALFORMED: the good ones do not vouch for it.
+  if [ "$erc" -ne 0 ]; then
+    malformed=$((malformed+1))
+    printf 'MALFORMED   %-16s has an "artifacts" key but the json block does not parse\n' "$id"
+    fail=$((fail+1))
+    continue
+  fi
   if [ -z "$records" ]; then
-    # Distinguish "no block" from "block present but unparseable" -- a malformed
-    # block that read as absent is how a checker silently passes.
-    if printf '%s\n' "$text" | grep -qE "^[[:space:]]*${FENCE}[[:space:]]*json"; then
-      if ! printf '%s\n' "$text" | grep -q '"artifacts"'; then
-        noblock=$((noblock+1))
-      else
-        malformed=$((malformed+1))
-        printf 'MALFORMED   %-16s has an "artifacts" key but the json block does not parse\n' "$id"
-        fail=$((fail+1))
-      fi
-    else
-      noblock=$((noblock+1))
-    fi
+    noblock=$((noblock+1))
     continue
   fi
 

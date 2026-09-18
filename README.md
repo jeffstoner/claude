@@ -201,6 +201,12 @@ what makes the mechanical check possible: a prose claim cannot be verified.
 An array of records rather than an object keyed by path, so the same file can appear as both
 `present` and `removed` (a renamed symbol) and so `jq` can iterate it directly.
 
+Notes are append-only, so a bead accumulates blocks: the tester's, the coder's, another from a
+coder resumed with audit findings, and finally the close reason's. The verifier folds every block
+in that order. Every claim is checked, and the last record for a path and symbol wins, so a resumed
+agent that renamed something appends a block marking the old symbol `removed` rather than trying to
+edit the earlier claim. A block that fails to parse is `MALFORMED` even when a later one is valid.
+
 **When it is checked:**
 
 | Moment | By | Against |

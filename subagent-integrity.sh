@@ -115,7 +115,7 @@ artifacts_gate() {
   if [ "$rc" -ne 0 ]; then
     block_stop "STOP BLOCKED ($atype): the artifacts block in $where claims code that is not on disk:
 $out
-Either the work is not there (check 'git status', commit it) or the claim is wrong (correct the block). Fix it now, while you still know which. If stopping without completing, begin your final message with 'ESCALATION:'."
+Either the work is not there (check 'git status', commit it) or the claim is wrong (correct the block). Every block in the notes is checked and the last record for a path+symbol wins: if an earlier block's claim is stale because you renamed or dropped that symbol, append a new block with {\"path\":..., \"symbols\":[\"<old>\"], \"state\":\"removed\"}; never rewrite the earlier one. Fix it now, while you still know which. If stopping without completing, begin your final message with 'ESCALATION:'."
   fi
   return 0
 }
