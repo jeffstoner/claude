@@ -17,8 +17,9 @@ false claim in one becomes wrong code, or a test that passes while asserting the
 
 - **Verify before you write it down** when the claim is a *mechanism* (how a framework or construct
   behaves), *reachability* ("nothing calls this"), *coverage* ("the test catches that"), or a
-  *number*. Verified means executed or read at the source. Not reasoned from defaults, and not
-  reported by a subagent: a subagent's report is a claim to check.
+  *number*. Verified means executed or read at the source, and each hop of the claim has its own
+  `path:symbol` pointer (the framework side and the project side are two hops). Not reasoned from
+  defaults, and not reported by a subagent: a subagent's report is a claim to check.
 - Most false assertions are relayed, not invented. Recording one in a bead launders it into
   authority for the next agent.
 - When you cannot verify cheaply, write "unverified:" and make confirming it an explicit task.

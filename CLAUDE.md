@@ -87,6 +87,13 @@ agent needs to know:
   as an advisory hint. Nothing to name inside the file: `path/to/file.ext (whole file)` or
   `path/to/file.ext (new file)`. Path and symbol are what the next agent greps; the line may
   already be stale.
+- **Claiming how code behaves.** A bead or brief that asserts a mechanism ("the framework does X
+  with our object O", "nothing calls this", "no guard exists") is an instruction the next agent
+  builds on without re-deriving. Each hop the claim depends on carries its own pointer in the form
+  above: the framework side in `vendor/` AND the project side in `app/`, not one for both. An
+  absence claim carries the search that established it (`grep -rn 'count(|complete' src/ found
+  nothing`), so the next agent can see whether the search was wide enough. A claim you cannot
+  point at is written `unverified:` and confirming it becomes an explicit task.
 - **Git.** Never work on the default branch; branch `<type>/<issue-id>` from HEAD first. Commit early
   to your branch with Conventional Commits, `type(<issue-id>): subject` (`NOTICKET` when there is no
   issue). Never stash, never discard changes you did not make, never push, pull or force. Merging is
