@@ -41,6 +41,14 @@ For what these components do and why, see `README.md`.
 ~/.claude/hooks/bd-verify-artifacts.sh    CLI, called by the sweep and the stop gate
 ```
 
+**Warning:** the `cp CLAUDE.md` line below **overwrites** any existing `~/.claude/CLAUDE.md` without
+prompting. If you already have one, back it up first and merge your content into the new file
+afterwards:
+
+```bash
+[ -f ~/.claude/CLAUDE.md ] && cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.bak
+```
+
 From the repo root:
 
 ```bash

@@ -32,7 +32,7 @@ to, and nowhere else:
 |---|---|---|
 | A hook's deny/ask message | the rule text itself, shown only when it is about to be broken | none |
 | A role agent's body | the judgement rules for that role; loaded only for that role, for its whole life | none for other roles |
-| `~/.claude/CLAUDE.md` | style, a short map of the workflow, and the code-reference form | ~400 tokens, re-injected after compaction |
+| `~/.claude/CLAUDE.md` | style, a short map of the workflow, and the code-reference form | ~1,300 tokens, re-injected after compaction |
 | `~/.claude/rules/learnings.md` | the learnings entry format, loaded only when touching `learnings/**` | none |
 | skills | rarely-needed procedures (`git-recovery`, `worktree-setup`) | a one-line description each |
 
