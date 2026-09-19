@@ -22,6 +22,9 @@ clobber work, etc. while several subagents worked. As it evolved, Claude was obs
 order its operations, not trust itself (especially subagents), run git commands safely and, in
 general, behave better.
 
+*Every rule and every hook were all born out of both good software engineering practices and
+observed bad behavior while working on real projects.*
+
 The current layout exists because of a second observation: a rulebook that every agent has to read
 is a rulebook agents forget. Earlier versions kept ~6,000 words of rules in files every agent was
 told to read; the reads cost tool calls and context, were discarded on compaction, and were skipped
