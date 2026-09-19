@@ -69,13 +69,20 @@ work and point at the role agents.
 
 # The role of your project's CLAUDE.md
 
+The framework installs a global `CLAUDE.md` but a `CLAUDE.md` in a project directory can be used
+to further refine Claude's behaviors. This framework uses several policies to relax some of the
+guards it encodes. For example, if you want to work with a proof-of-concept and don't need the
+rigor of feature branches and PRs when merging to the default branch, simply add some Polcy
+lines (detailed below) to the project's `CLAUDE.md` and streamline your work.
+
 Every agent, including every subagent, loads the project's `CLAUDE.md` itself, so a setting there
 propagates automatically and survives context loss; a verbal override lives only in one agent's head
 and cannot be safely relayed downward. If you find yourself repeating a verbal override, move it into
 the project file.
 
 Because hooks enforce the rules, overrides must be **exact, greppable lines**. Free prose is not
-honoured. The vocabulary:
+honoured. It is **highly** recommended that you always include the `Default branch:` line in your
+project's `CLAUDE.md` file. The vocabulary:
 
 ```
 Default branch: main                     # authoritative; outranks anything inferred from git
