@@ -32,7 +32,8 @@ the integration branch after the audit, then remove the worktree and delete the 
 
 ```bash
 git merge <generated-name>
-git worktree remove .claude/worktrees/agent-abc123      # the guard confirms the branch is merged
+git worktree remove .claude/worktrees/agent-abc123      # confirms the branch is merged; refuses on
+                                                        # untracked files — see Dependencies
 git branch -d <generated-name>
 ```
 
@@ -71,8 +72,27 @@ git -C ../wt-baseline checkout --detach <new-head>    # after each merge into th
 A worktree does not need its own virtualenv or `node_modules`:
 
 1. `worktree.symlinkDirectories: ["node_modules", ".venv"]` in `settings.json` symlinks the named
-   directories from the main checkout into each worktree. Whether nested paths such as `api/.venv`
-   are honoured is unverified; test before relying on it.
+   directories from the main checkout into each worktree. Every entry is resolved independently and
+   treated the same way, whatever it names:
+   - Nested paths work: `"api/.venv"` lands at `<worktree>/api/.venv`, not flattened to the root.
+     Verified only with a tracked parent directory, already present in the worktree.
+   - An entry absent from the main checkout is skipped silently — no dangling link, no empty
+     directory. Don't go hunting for it.
+   - The arrays merge across settings layers, global through `settings.local.json`, rather than the
+     narrower layer overriding. To stop linking something, remove it from the layer that names it;
+     shadowing it from a higher-precedence file does not work. Changes apply at the next dispatch.
+
+   Each resolved entry is a symlink, and git does not treat a symlink as a directory, so a
+   `.gitignore` pattern ending in `/` does not match it: `.venv/` leaves `<worktree>/api/.venv`
+   untracked and `git worktree remove` refuses. Drop the trailing slash for every name in
+   `symlinkDirectories` (`.venv`, `node_modules`, `dist`) — in `.gitignore`, or in
+   `.git/info/exclude`, which covers every worktree, when the project's `.gitignore` is not yours to
+   change. Removal does not follow the links, so cleanup is then safe.
+
+   If you are already blocked, `readlink` the path to confirm it is a link, then remove the link:
+   `rm <worktree>/api/.venv`, no trailing slash, no `-r`, no `-f`. `rm -rf <link>/` follows it and
+   empties the directory every worktree shares; `--force` on the removal discards whatever else was
+   uncommitted without showing you what it was.
 2. Or invoke the main checkout's interpreter by absolute path with the worktree as CWD. For a
    `src`-layout Python project with `pythonpath = ["src"]` and no editable install, the venv holds
    only third-party dependencies, so imports resolve to the worktree's `src`.
