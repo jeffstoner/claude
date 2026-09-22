@@ -10,7 +10,8 @@
 #  5    A SUBAGENT may not merge, delete a branch, or remove a worktree. Merging
 #       and cleanup are the orchestrator's actions, after the audit.
 #  6    Default branch: never commit on it; merging into it asks the user (the
-#       permission prompt IS the approval, scoped to one merge). Detached HEAD
+#       permission prompt IS the approval, scoped to one merge), and the prompt
+#       carries the artifacts sweep of the branch being merged. Detached HEAD
 #       is a stop.
 #  7    Worktree removal only once its branch is merged; `branch -D` never.
 #  8    Branch names are <type>/<issue-id> (or <type>/<slug> with tracking off).
@@ -82,6 +83,30 @@ default_note() {
   if [ -n "$default" ]; then printf 'The default branch is %s.' "$default"
   else printf 'The default branch could not be determined (no "Default branch:" line in the project CLAUDE.md and no remote) and "%s" looks like one. Ask the user and record "Default branch: <name>" in the project CLAUDE.md so this is not asked again.' "$branch"; fi
 }
+# The merge into the default branch is the moment the user judges the whole body of
+# work, so the artifacts sweep runs here and its result goes into the prompt: every
+# closed issue's claims, verified against the branch being merged (bd-verify-artifacts.sh
+# --ref <src>). Silent when there is no tracker to walk. The verifier is bounded so a
+# slow sweep cannot time out the hook -- an erroring PreToolUse hook does not ask.
+merge_sweep() { # <args of the merge segment>
+  local src out rc verifier
+  tracker_active || return 0
+  command -v bd >/dev/null 2>&1 || return 0
+  verifier="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bd-verify-artifacts.sh"
+  [ -x "$verifier" ] || return 0
+  # Source ref: the last non-option word. Quoted values are already emptied ("" / '').
+  src="$(printf '%s' "$1" | awk '{for(i=NF;i>=1;i--) if ($i !~ /^-/ && $i != "\"\"" && $i != "\047\047") {print $i; exit}}')"
+  if [ -z "$src" ] || ! git -C "$cwd" rev-parse --verify -q "$src^{commit}" >/dev/null 2>&1; then
+    printf ' Integrity sweep SKIPPED: could not identify the branch being merged. Run the verify-artifacts skill against it before approving.'
+    return 0
+  fi
+  out="$(cd "$cwd" && timeout 6 "$verifier" --ref "$src" 2>&1)"; rc=$?
+  case "$rc" in
+    0)   printf ' Integrity sweep of %s: %s' "$src" "$(printf '%s\n' "$out" | tail -1)" ;;
+    124) printf ' Integrity sweep of %s TIMED OUT. Run the verify-artifacts skill before approving.' "$src" ;;
+    *)   printf ' ⚠ INTEGRITY SWEEP of %s FAILED — closed issues claim code that is not on that branch:\n%s\nApproving merges those gaps into the default branch; otherwise reopen the affected issues and recover the work first (git fsck --unreachable | grep commit).' "$src" "$out" ;;
+  esac
+}
 BRANCH_RE='^[a-z][a-z0-9-]*/[A-Za-z0-9._-]+$'
 SEMVER_RE='^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
 
@@ -126,7 +151,8 @@ while IFS= read -r seg; do
     merge|rebase|cherry-pick)
       printf '%s' "$args" | grep -qE '(^|[[:space:]])--abort([[:space:]]|$)' && continue
       if on_default && ! policy_has "merge-to-default allowed"; then
-        ask "Merging/rebasing INTO the default branch '$branch'. $(default_note) Approving this prompt is the user's approval for exactly this one merge. Not approved means: merge into the integration branch instead and leave the default branch to the user. (A project may relax this with 'Policy: merge-to-default allowed'.)"
+        sweep=""; [ "$sub" = merge ] && sweep="$(merge_sweep "$args")"
+        ask "Merging/rebasing INTO the default branch '$branch'. $(default_note)$sweep Approving this prompt is the user's approval for exactly this one merge. Not approved means: merge into the integration branch instead and leave the default branch to the user. (A project may relax this with 'Policy: merge-to-default allowed'.)"
       fi
       ;;
     # ---- 7. worktree removal only after merge; branch -D never ---------------

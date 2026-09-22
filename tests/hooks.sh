@@ -107,6 +107,39 @@ g "literal: real stash after quoted heredoc" deny $'bd update gg-9 --append-note
 git -C "$R" switch -q --detach
 g "commit on detached HEAD" deny 'git commit -m "feat(gg-1): x"'
 
+# merge into the default branch: the ask prompt carries the artifacts sweep of the
+# branch being merged, so the user judges the whole body of work with the findings in view
+M="$(mkrepo mergesweep)"; mkdir -p "$M/.beads" "$M/bin"
+printf 'Default branch: main\n' > "$M/CLAUDE.md"
+printf 'done\n%sjson\n{"artifacts":[{"path":"src/m.py","symbols":["hello_sym"]}]}\n%s\n' "$F" "$F" > "$M/close.txt"
+cat > "$M/bin/bd" <<'STUB'
+#!/usr/bin/env bash
+# test stub: `bd list --status=closed --json` answers with one closed issue whose close reason is ../close.txt
+here="$(cd "$(dirname "$0")/.." && pwd)"
+[ "${1:-}" = list ] || exit 0
+jq -nc --rawfile r "$here/close.txt" '[{id:"gg-3", notes:"", close_reason:$r}]'
+STUB
+chmod +x "$M/bin/bd"
+# the fixtures (stub, CLAUDE.md, close.txt) stay untracked: `add -A` would commit them
+# on the task branch and the switch back to main would remove them
+git -C "$M" switch -q -c feat/gg-3; mkdir -p "$M/src"; printf 'def hello_sym(): pass\n' > "$M/src/m.py"
+git -C "$M" add src; git -C "$M" commit -qm "feat(gg-3): add hello_sym"
+git -C "$M" switch -q -c feat/gg-4 main; printf 'def other(): pass\n' > "$M/o.py"
+git -C "$M" add o.py; git -C "$M" commit -qm "feat(gg-4): unrelated"
+git -C "$M" switch -q main
+ms() { # name expected-decision command grep-pattern
+  local out; out="$(pbash "$M" "$3" | PATH="$M/bin:$PATH" "$HOOKS/guard-git.sh" 2>/dev/null)"
+  check "merge sweep: $1" "$2" "$(printf '%s' "$out" | decide)"
+  check "merge sweep: $1 reason $4" yes "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' | grep -qE "$4" && echo yes || echo no)"
+}
+ms "branch carrying the claim" ask 'git merge feat/gg-3' '1 claim\(s\) checked, 0 failed'
+ms "branch lacking the claim" ask 'git merge feat/gg-4' 'INTEGRITY SWEEP.*FAILED|MISSING.*hello_sym'
+ms "--no-ff and -m before the ref" ask 'git merge --no-ff -m "merge it" feat/gg-3' '0 failed'
+ms "unresolvable ref" ask 'git merge nosuchbranch' 'SKIPPED'
+printf 'Policy: no issue tracker\n' >> "$M/CLAUDE.md"
+ms "tracker off says nothing" ask 'git merge feat/gg-4' '^Merging/rebasing INTO the default branch .main.\. The default branch is main\. Approving'
+
+
 # ---- guard-bd.sh ---------------------------------------------------------------
 b "update --notes" deny 'bd update gg-1 --notes "x"'
 b "update --append-notes" allow 'bd update gg-1 --append-notes "x"'

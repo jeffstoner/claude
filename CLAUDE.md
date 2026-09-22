@@ -106,4 +106,4 @@ agent needs to know:
 - **Project overrides** are exact lines in the project's `CLAUDE.md`: `Default branch: <name>`,
   `Policy: commit-on-default allowed`, `Policy: merge-to-default allowed`,
   `Policy: todo-comments allowed`, `Policy: no issue tracker`, `Test-paths: <glob>`.
-- Skills on demand: `worktree-setup`, `git-recovery`.
+- Skills on demand: `worktree-setup`, `git-recovery`, `verify-artifacts`.

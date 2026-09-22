@@ -28,6 +28,7 @@ For what these components do and why, see `README.md`.
 ~/.claude/rules/learnings.md              path-scoped: loads only when touching learnings/**
 ~/.claude/skills/git-recovery/SKILL.md    on demand
 ~/.claude/skills/worktree-setup/SKILL.md  on demand
+~/.claude/skills/verify-artifacts/SKILL.md on demand
 ~/.claude/hooks/policy-lib.sh             sourced by every hook; not a hook itself
 ~/.claude/hooks/guard-git.sh
 ~/.claude/hooks/guard-bd.sh
@@ -37,8 +38,7 @@ For what these components do and why, see `README.md`.
 ~/.claude/hooks/subagent-integrity.sh
 ~/.claude/hooks/learnings-context.sh
 ~/.claude/hooks/post-merge-status.sh
-~/.claude/hooks/session-close-sweep.sh
-~/.claude/hooks/bd-verify-artifacts.sh    CLI, called by the sweep and the stop gate
+~/.claude/hooks/bd-verify-artifacts.sh    CLI, called by the merge prompt, the stop gate and the skill
 ```
 
 **Warning:** the `cp CLAUDE.md` line below **overwrites** any existing `~/.claude/CLAUDE.md` without
@@ -56,7 +56,7 @@ mkdir -p ~/.claude/agents ~/.claude/rules ~/.claude/skills ~/.claude/hooks
 cp CLAUDE.md ~/.claude/CLAUDE.md
 cp agents/*.md ~/.claude/agents/
 cp rules/*.md ~/.claude/rules/
-cp -r skills/git-recovery skills/worktree-setup ~/.claude/skills/
+cp -r skills/git-recovery skills/worktree-setup skills/verify-artifacts ~/.claude/skills/
 cp *.sh ~/.claude/hooks/
 ```
 
@@ -76,8 +76,8 @@ ls -l ~/.claude/hooks/*.sh
 ```
 
 A non-executable `PreToolUse` hook errors instead of guarding, and an erroring hook does not deny.
-`session-close-sweep.sh` and `subagent-integrity.sh` guard on `[ -x bd-verify-artifacts.sh ]` and
-silently do nothing if it is not executable.
+`guard-git.sh` (the merge-prompt sweep) and `subagent-integrity.sh` guard on
+`[ -x bd-verify-artifacts.sh ]` and silently skip the check if it is not executable.
 
 ## 3. Merge the hook registrations into `~/.claude/settings.json`
 
@@ -146,13 +146,6 @@ silently do nothing if it is not executable.
           { "type": "command", "command": "~/.claude/hooks/subagent-integrity.sh stop", "timeout": 60 }
         ]
       }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/session-close-sweep.sh", "timeout": 60 }
-        ]
-      }
     ]
   },
   "worktree": {
@@ -164,8 +157,8 @@ silently do nothing if it is not executable.
 
 Notes:
 
-- **`matcher`** applies to tool events only. `SessionStart`, `SubagentStart`, `SubagentStop` and
-  `SessionEnd` take none.
+- **`matcher`** applies to tool events only. `SessionStart`, `SubagentStart` and `SubagentStop`
+  take none.
 - **`if:`** uses permission-rule syntax and matches each subcommand of a compound command
   (`cd x && git merge y` matches `Bash(git *)`). It is an optimisation; each script re-checks its
   own input.
