@@ -10,7 +10,7 @@ provides structure for agents to operate under by defining:
 * recording "lessons learned" for future agents to reference
 
 It is delivered as one small always-loaded instruction file, four role agents, a set of hooks that
-enforce the rules mechanically, one path-scoped rule file and two on-demand skills. *Instruction
+enforce the rules mechanically, one path-scoped rule file and three on-demand skills. *Instruction
 files advise; hooks enforce.* A CLI (`bd-board`) helps plan work.
 
 For installation, see `INSTALL.md`.
@@ -37,7 +37,7 @@ to, and nowhere else:
 | A role agent's body | the judgement rules for that role; loaded only for that role, for its whole life | none for other roles |
 | `~/.claude/CLAUDE.md` | style, a short map of the workflow, and the code-reference form | ~1,300 tokens, re-injected after compaction |
 | `~/.claude/rules/learnings.md` | the learnings entry format, loaded only when touching `learnings/**` | none |
-| skills | rarely-needed procedures (`git-recovery`, `worktree-setup`) | a one-line description each |
+| skills | rarely-needed procedures (`git-recovery`, `worktree-setup`, `verify-artifacts`) | a one-line description each |
 
 # Required Tooling
 
@@ -132,7 +132,7 @@ fails, remove it from the list and use the `Agent` tool's resume path.
 
 | Script | Event | What it enforces |
 |---|---|---|
-| `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | no stash / pathspec checkout / hard reset / clean / push / pull / `--force` (except `worktree add -f`); a **subagent** may not merge, delete a branch or remove a worktree; **no commit on the default branch**, detached HEAD is a stop; **merge into the default branch asks the user**; a worktree is removed only once its branch is merged; `branch -D` never; branch names `<type>/<id>` for branches created by hand (harness-generated worktree branches never pass through the hook); SemVer tags; **Conventional Commits** with a scope, ≤ 72-char subject, `!` ⇔ `BREAKING CHANGE:` |
+| `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | no stash / pathspec checkout / hard reset / clean / push / pull / `--force` (except `worktree add -f`); a **subagent** may not merge, delete a branch or remove a worktree; **no commit on the default branch**, detached HEAD is a stop; **merge into the default branch asks the user**, and the prompt carries the artifacts sweep of the branch being merged; a worktree is removed only once its branch is merged; `branch -D` never; branch names `<type>/<id>` for branches created by hand (harness-generated worktree branches never pass through the hook); SemVer tags; **Conventional Commits** with a scope, ≤ 72-char subject, `!` ⇔ `BREAKING CHANGE:` |
 | `guard-bd.sh` | `PreToolUse`, `if: Bash(bd *)` | `--notes` (the replace form) denied, `--append-notes` only; no inline `$(...)` into fields except `$(cat <file>)`; `bd edit` denied; a subagent may not `bd close` or `--status=closed`; `bd label add <id> human` asks |
 | `guard-edit.sh` | `PreToolUse`, `Edit\|Write\|NotebookEdit\|MultiEdit` (global) and per-agent | global: an edit may not **add** a TODO/FIXME comment; `coder`: no test paths; `tester`: only test paths (asks otherwise); `auditor`: no Bash writes, no git/bd mutations |
 | `guard-dispatch.sh` | `PreToolUse`, `Agent\|TodoWrite\|TaskCreate\|TaskUpdate` | in a beads project: no TodoWrite/TaskCreate; no `general-purpose` agent for work, use the role agents |
@@ -140,8 +140,7 @@ fails, remove it from the list and use the `Agent` tool's resume path.
 | `subagent-integrity.sh` | `SubagentStart`, `SubagentStop` | `coder`/`tester`: **stop is blocked** until the artifacts block exists and every claim is true on disk; other agents: warn on zero repository delta; read-only agent types skipped |
 | `learnings-context.sh` | `SessionStart`, `SubagentStart`, `PostToolUseFailure` | when `learnings/` exists: inject the protocol and the file list (also after compaction); nudge to grep learnings after a failed command, at most once per 10 minutes |
 | `post-merge-status.sh` | `PostToolUse`, `if: Bash(git merge *)` | report untracked files after a merge |
-| `session-close-sweep.sh` | `SessionEnd` | every closed issue's artifacts claims verified against `HEAD` |
-| `bd-verify-artifacts.sh` | CLI | the verifier the sweep and the stop gate call |
+| `bd-verify-artifacts.sh` | CLI | the verifier the merge prompt, the stop gate and the `verify-artifacts` skill call |
 | `policy-lib.sh` | sourced | hook responses, policy lines, default-branch resolution, command splitting |
 
 Global versus agent-scoped: everything that must hold even when the role agents are not in use is
@@ -223,10 +222,13 @@ edit the earlier claim. A block that fails to parse is `MALFORMED` even when a l
 |---|---|---|
 | the coder/tester stops | `subagent-integrity.sh` | the files on disk in the agent's worktree (`--ref worktree`) |
 | `bd close` | `require-artifacts-block.sh` | the block parses and has the right shape |
-| session end | `session-close-sweep.sh` | committed `HEAD` (`--ref HEAD`) |
+| merge into the default branch | `guard-git.sh`, in the permission prompt | the branch being merged (`--ref <branch>`) |
+| whenever the user asks | the `verify-artifacts` skill | `HEAD`, a named branch, or the working tree |
 
-The session-end check sees only committed work, which is why committing each task's work as soon as
+The merge-time sweep sees only committed work, which is why committing each task's work as soon as
 its gates pass is a rule and not a suggestion: drop the commit rule and the sweep reports false gaps.
+It runs inside the merge prompt because that is the moment the user judges the whole body of work;
+earlier versions ran it at `SessionEnd`, where nothing reads a hook's output.
 
 `bd-verify-artifacts.sh` is useful directly:
 

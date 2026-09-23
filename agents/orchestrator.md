@@ -156,5 +156,5 @@ are `<type>/<short-slug>`. The tester's and coder's artifacts blocks go in their
 (the stop hook reads them there). The post-implementation review comes to you in the agent's final
 report and from you to the user. Unfinished work is reported to the user before the task ends, named
 specifically enough to act on. Tests-by-a-different-agent and audit-before-merge still hold; no
-project file relaxes them. The session-end integrity sweep has no close-reasons to walk, so verify
+project file relaxes them. The merge-time integrity sweep has no close-reasons to walk, so verify
 each task commit's block by hand: `bd-verify-artifacts.sh --text-file <(git log -1 --format=%B <sha>)`.
