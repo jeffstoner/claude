@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""
+bd-spec — one planned epic rendered as a specification, derived from beads. Nothing
+is stored here; every line is computed from `bd list --all --json` on each run, so the
+view cannot drift from the beads the tester and coder will read. The planner shows it
+to the user for approval; the spec-auditor audits the beads themselves.
+
+Sections: the epic (its description carries intent, scope, non-goals and the decision
+log); every bead under it, containers first, leaves in dependency order, each with
+description, acceptance criteria, design and blockers; then the `human` decision beads
+the leaves wait on. An empty field is printed as "(none)" so its absence is visible.
+
+Usage:  bd-spec [-C DIR] <epic-id>
+"""
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import textwrap
+
+BLOCKING_EDGE = "blocks"
+CONTAINER_TYPES = {"epic", "milestone"}
+HUMAN_LABEL = "human"
+
+
+def load(cwd):
+    if not shutil.which("bd"):
+        sys.exit("bd-spec: `bd` not found on PATH")
+    try:
+        out = subprocess.run(["bd", "list", "--all", "--json"],
+                             cwd=cwd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        sys.exit("bd-spec: `bd list` timed out")
+    except FileNotFoundError:
+        sys.exit(f"bd-spec: no such directory: {cwd}")
+    if out.returncode != 0:
+        msg = (out.stderr or out.stdout or "").strip().splitlines()
+        sys.exit("bd-spec: bd failed: " + (msg[0] if msg else "unknown error"))
+    try:
+        return json.loads(out.stdout)
+    except json.JSONDecodeError:
+        sys.exit("bd-spec: could not parse `bd list --all --json` output")
+
+
+def blockers(issue):
+    """Only `blocks` edges gate readiness; parent-child edges are structural."""
+    return [d["depends_on_id"] for d in (issue.get("dependencies") or [])
+            if d.get("type") == BLOCKING_EDGE]
+
+
+def descendants(children, root):
+    out, stack = [], [root]
+    while stack:
+        cur = stack.pop()
+        kids = sorted(children.get(cur, []), key=lambda i: i["id"])
+        out.extend(kids)
+        stack.extend(k["id"] for k in kids)
+    return out
+
+
+def dep_order(leaves):
+    """Leaves ordered so a bead follows the leaves it depends on; ties by id."""
+    ids = {i["id"] for i in leaves}
+    pending = {i["id"]: {b for b in blockers(i) if b in ids} for i in leaves}
+    by_id = {i["id"]: i for i in leaves}
+    out = []
+    while pending:
+        ready = sorted(k for k, v in pending.items() if not v)
+        if not ready:                      # cycle: emit the rest by id, bd dep cycles will say why
+            ready = sorted(pending)
+        for k in ready:
+            out.append(by_id[k])
+            del pending[k]
+            for v in pending.values():
+                v.discard(k)
+    return out
+
+
+def field(label, text):
+    print(f"  {label}:")
+    text = (text or "").strip()
+    if not text:
+        print("    (none)")
+        return
+    for line in text.splitlines():
+        print(textwrap.indent(line.rstrip(), "    ") if line.strip() else "")
+
+
+def head(issue, marker):
+    labels = ", ".join(issue.get("labels") or [])
+    tag = f"{issue.get('issue_type', '?')}  P{issue.get('priority', '?')}  {issue.get('status', '?')}"
+    tag += f"  [{labels}]" if labels else ""
+    print(f"\n{marker} {issue['id']}  {issue.get('title', '')}")
+    print(f"  {tag}")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Render one epic's beads as a specification.")
+    ap.add_argument("-C", dest="dir", default=".", help="run in this directory")
+    ap.add_argument("epic", help="epic id")
+    args = ap.parse_args()
+
+    issues = load(args.dir)
+    by_id = {i["id"]: i for i in issues}
+    epic = by_id.get(args.epic)
+    if epic is None:
+        sys.exit(f"bd-spec: no bead {args.epic}")
+
+    children = {}
+    for i in issues:
+        if i.get("parent"):
+            children.setdefault(i["parent"], []).append(i)
+
+    tree = descendants(children, epic["id"])
+    containers = [i for i in tree if i.get("issue_type") in CONTAINER_TYPES]
+    leaves = dep_order([i for i in tree if i.get("issue_type") not in CONTAINER_TYPES])
+
+    rule = "=" * 78
+    print(rule)
+    print(f"SPEC  {epic['id']}  {epic.get('title', '')}")
+    print(rule)
+    head(epic, "==")
+    field("Description", epic.get("description"))
+
+    for c in containers:
+        head(c, "--")
+        field("Description", c.get("description"))
+
+    gates = {}
+    for leaf in leaves:
+        head(leaf, "##")
+        if leaf.get("parent") and leaf["parent"] != epic["id"]:
+            print(f"  under: {leaf['parent']}")
+        deps = []
+        for b in blockers(leaf):
+            dep = by_id.get(b, {})
+            deps.append(f"{b} ({dep.get('title', '?')}, {dep.get('status', '?')})")
+            if HUMAN_LABEL in (dep.get("labels") or []):
+                gates[b] = dep
+        print("  depends on: " + (", ".join(deps) if deps else "(none)"))
+        field("Description", leaf.get("description"))
+        field("Acceptance criteria", leaf.get("acceptance_criteria"))
+        field("Design", leaf.get("design"))
+
+    print(f"\n{rule}")
+    print("HUMAN DECISIONS the leaves wait on")
+    if not gates:
+        print("  (none)")
+    for g in sorted(gates.values(), key=lambda i: i["id"]):
+        head(g, "??")
+        field("Description", g.get("description"))
+    print(f"\n{rule}")
+    print(f"  {len(leaves)} leaf beads · {len(containers)} containers · "
+          f"{sum(1 for g in gates.values() if g.get('status') != 'closed')} decisions open")
+    print("  bd show <id> · bd human respond <id> · bd ready\n")
+
+
+if __name__ == "__main__":
+    main()

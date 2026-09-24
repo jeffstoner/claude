@@ -17,7 +17,7 @@
 # B. ZERO-DELTA WARNING (everything else) -- snapshot HEAD + `git status
 #    --porcelain` at start, compare at stop; identical means the agent changed
 #    nothing, and its success report needs verifying. Read-only agent types
-#    (auditor, Explore, Plan, ...) are skipped: zero delta is their correct
+#    (auditor, surveyor, spec-auditor, Explore, Plan, ...) are skipped: zero delta is their correct
 #    behaviour, and warning on them was the documented false positive.
 #
 # Always exits 0 and never breaks a session.
@@ -42,7 +42,7 @@ read_payload
 id="${agent_id:-unknown}"; atype="${agent_type:-unknown}"
 last="$(printf '%s' "$payload" | jq -r '.last_assistant_message // ""' 2>/dev/null | tr '\n' ' ' | cut -c1-240)"
 
-case "$atype" in auditor|Explore|Plan|claude-code-guide|statusline-setup) exit 0 ;; esac
+case "$atype" in auditor|surveyor|spec-auditor|Explore|Plan|claude-code-guide|statusline-setup) exit 0 ;; esac
 
 in_repo || exit 0
 root="$(repo_root)" || exit 0

@@ -156,6 +156,11 @@ b "show" allow 'bd show gg-1'
 b "echo bd --notes" allow 'echo bd --notes'
 b "literal: append-notes heredoc mentions --notes" allow $'bd update gg-9 --append-notes "$(cat <<\'EOF\'\nNever use --notes; it replaces.\nEOF\n)"'
 b "literal: nested bd show in double quotes still visible" deny 'bd update gg-9 --design="$(bd show gg-1 --json)"'
+# Rule 6 in guard-bd.sh is dormant (commented out); uncomment these with it.
+# b "create work bead without --acceptance" deny 'bd create "Leaf" -t task --parent gg-1'
+# b "create work bead with --acceptance" allow 'bd create "Leaf" -t task --acceptance "1. given x when y then z"'
+# b "create epic without --acceptance" allow 'bd create "Epic" -t epic'
+# b "create decision without --acceptance" allow 'bd create "Approve spec" -t decision -l human'
 
 # ---- guard-edit.sh -------------------------------------------------------------
 R="$(mkrepo edit)"; mkdir -p "$R/src" "$R/tests"; : > "$R/src/mod.py"; : > "$R/tests/test_mod.py"
@@ -201,6 +206,12 @@ eb auditor "bd show" allow 'bd show gg-1 --json'
 eb auditor "redirect to file" deny 'pytest > out.txt'
 eb auditor "pipe to tail" allow 'pytest -q 2>&1 | tail'
 eb auditor "redirect to /dev/null" allow 'ls >/dev/null 2>&1'
+eb surveyor "git commit" deny 'git commit -m x'
+eb surveyor "bd show" allow 'bd show gg-1 --json'
+eb surveyor "grep -rn" allow 'grep -rn "def foo" src/'
+eb spec-auditor "bd create" deny 'bd create "x" -t task'
+eb spec-auditor "redirect to file" deny 'bd show gg-1 > spec.txt'
+eb spec-auditor "bd list --json | jq" allow 'bd list --parent gg-1 --json | jq .'
 
 # ---- guard-dispatch.sh ---------------------------------------------------------
 R="$(mkrepo dispatch)"
@@ -212,6 +223,8 @@ run "dispatch: Agent general-purpose" deny "$(pagent "$R" general-purpose)" guar
 run "dispatch: Agent no subagent_type" deny "$(pagent "$R")" guard-dispatch.sh
 run "dispatch: Agent coder" allow "$(pagent "$R" coder)" guard-dispatch.sh
 run "dispatch: Agent Explore" allow "$(pagent "$R" Explore)" guard-dispatch.sh
+run "dispatch: Agent surveyor" allow "$(pagent "$R" surveyor)" guard-dispatch.sh
+run "dispatch: Agent spec-auditor" allow "$(pagent "$R" spec-auditor)" guard-dispatch.sh
 printf 'Policy: no issue tracker\n' > "$R/CLAUDE.md"
 run "dispatch: TodoWrite, tracker off" allow "$TODO_PL" guard-dispatch.sh
 
@@ -286,6 +299,8 @@ run "stop: coder, valid block" allow "$(pstop "$S" coder 'Done.' false)" subagen
 sed -i 's/hello_sym/nope_sym/' "$TMP/msg"; git -C "$S" commit -q --amend -F "$TMP/msg"
 run "stop: coder, block names missing symbol" block "$(pstop "$S" coder 'Done.' false)" subagent-integrity.sh stop
 run "stop: auditor skipped" allow "$(pstop "$S" auditor 'Done.' false)" subagent-integrity.sh stop
+run "stop: surveyor skipped" allow "$(pstop "$S" surveyor 'Done.' false)" subagent-integrity.sh stop
+run "stop: spec-auditor skipped" allow "$(pstop "$S" spec-auditor 'Done.' false)" subagent-integrity.sh stop
 # claims are verified in the agent's own worktree (payload cwd), never the main checkout
 W="$(mkrepo stopwt)"; git -C "$W" switch -q -c feat/gg-7
 WT="$W/.claude/worktrees/agent-a9"; git -C "$W" worktree add -q "$WT" -b worktree-agent-a9

@@ -13,6 +13,9 @@
 #     orchestrator performs it), including the `--status=closed` back door.
 #  5. Labelling an implementation bead `human` is almost always a mistake:
 #     `bd human respond` CLOSES the bead it answers. Decisions get their own bead.
+#  6. DORMANT (commented out below): a work bead created without --acceptance gives
+#     the tester nothing to test from. Enable if planner-written leaves turn up
+#     without criteria; the matching tests in tests/hooks.sh are commented out too.
 #
 # The artifacts-block contract on `bd close` is require-artifacts-block.sh's job.
 set -uo pipefail
@@ -57,6 +60,13 @@ while IFS= read -r seg; do
     edit)
       deny "BLOCKED: 'bd edit' opens \$EDITOR and blocks the agent. Use 'bd update <id> --<field>-file <path>' instead."
       ;;
+    # create)
+    #   # Rule 6, dormant. Containers (epic, milestone) and decision beads carry no criteria.
+    #   if ! printf '%s' "$seg" | grep -qE '(^|[[:space:]])(-t|--type)[=[:space:]]+(epic|milestone|decision)([[:space:]]|$)' \
+    #      && ! printf '%s' "$seg" | grep -qE '(^|[[:space:]])--acceptance([=[:space:]]|$)'; then
+    #     deny "BLOCKED: a work bead created without --acceptance gives the tester nothing to test from. State the criteria as numbered given/when/then with concrete values: bd create ... --acceptance \"...\". Containers (-t epic|milestone) and decision beads (-t decision) are exempt."
+    #   fi
+    #   ;;
     label)
       if printf '%s' "$seg" | grep -qE 'label[[:space:]]+add[[:space:]]+[^[:space:]]+[[:space:]]+human([[:space:]]|$)'; then
         ask "Labelling this bead 'human' means 'bd human respond' will CLOSE it when the human answers. If this is an implementation bead, do not: file a separate decision bead stating the concrete options, label THAT one 'human', and 'bd dep add <impl-bead> <decision-bead>' so the work is blocked on it. Approve only if this bead exists solely to hold the decision."
