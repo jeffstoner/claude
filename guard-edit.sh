@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ~/.claude/hooks/guard-edit.sh  [global|coder|tester|auditor]
+# ~/.claude/hooks/guard-edit.sh  [global|coder|tester|auditor|surveyor|spec-auditor]
 #
 # global (default; registered in settings.json, matcher Edit|Write|NotebookEdit|MultiEdit):
 #   The TODO ban. Deny an edit that ADDS a TODO/FIXME comment marker. Work still
@@ -19,9 +19,9 @@
 #   source files (Rust #[cfg(test)], doctests); a project can extend the test set
 #   with CLAUDE.md lines: Test-paths: <glob>
 #
-# auditor (agent-scoped, matcher Bash):
-#   An auditor changes nothing. Edit/Write are removed by disallowedTools; this
-#   catches the Bash routes: redirections, tee, sed -i, git/bd mutations.
+# auditor / surveyor / spec-auditor (agent-scoped, matcher Bash):
+#   A read-only role changes nothing. Edit/Write are removed by disallowedTools;
+#   this catches the Bash routes: redirections, tee, sed -i, git/bd mutations.
 set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/policy-lib.sh"
 
@@ -142,16 +142,16 @@ case "$role" in
         fi ;;
     esac
     ;;
-  auditor)
+  auditor|surveyor|spec-auditor)
     [ "$tool" = "Bash" ] || exit 0
     if printf '%s' "$code" | grep -qE '(^|[[:space:]({])git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(add|commit|merge|rebase|cherry-pick|reset|checkout|switch|restore|rm|mv|stash|worktree|branch[[:space:]]+-|tag|push|pull|clean)\b'; then
-      deny "BLOCKED: the auditor changes nothing. Read-only git only (log, show, diff, status, grep, blame). Report findings; the orchestrator routes fixes to the original coder."
+      deny "BLOCKED: the $role changes nothing. Read-only git only (log, show, diff, status, grep, blame). Report findings; the agent that dispatched you routes them."
     fi
     if printf '%s' "$code" | grep -qE '(^|[[:space:]({])bd[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(update|close|done|create|dep|label|delete|defer|supersede|human)\b'; then
-      deny "BLOCKED: the auditor does not write to the tracker. Put findings in your final report; the orchestrator records them (in the bead, or as new beads for out-of-scope findings)."
+      deny "BLOCKED: the $role does not write to the tracker. Put findings in your final report; the agent that dispatched you records them (in the bead, or as new beads for out-of-scope findings)."
     fi
     if bash_writes "$code"; then
-      deny "BLOCKED: the auditor changes nothing in the repository — no redirections, tee, sed -i, cp/mv/rm/touch. Run tests and read code; report what you find."
+      deny "BLOCKED: the $role changes nothing in the repository — no redirections, tee, sed -i, cp/mv/rm/touch. Read code, run tests; report what you find."
     fi
     ;;
 esac

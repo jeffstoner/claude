@@ -80,6 +80,10 @@ both record the same lesson for the same bead, you will see two entries at merge
   (`bd update <id> --design-file <path>`), never only in the prompt, which dies with the agent.
   Product or priority call: ask the user. A pattern that will recur: `learnings/`. A standing
   convention for the project: the project's `CLAUDE.md`.
+- **An epic the planner produced already carries these decisions.** Each leaf's design field has
+  `Decisions:`, `Integration:`, `Owns:`/`Others:` and `Audit attack surface:`; take the tester's,
+  coder's and auditor's briefs from there rather than deciding in a prompt. A leaf missing one of
+  them is a planning gap: decide and record it as above, and tell the user the plan had a hole.
 - **Never dispatch a task whose premise is not yet in the working tree.** Tests for X do not start
   until X has landed (and vice versa for test-first work). Record the ordering with `bd dep add`.
 - **Serialize same-file edits** with `bd dep`; never two agents at one file. Each brief states the
