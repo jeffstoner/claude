@@ -4,14 +4,16 @@ This repository contains the framework for one developer's (opinionated) use of 
 provides structure for agents to operate under by defining:
 
 * the use of `beads` as an independent issue tracker
+* a Planner that turns an idea into decomposed, audited, approved beads and never implements them
 * an Orchestrator that coordinates work and never implements it
 * a defined agent workflow: write tests, write code, audit code and results
 * how to use Git
 * recording "lessons learned" for future agents to reference
 
-It is delivered as one small always-loaded instruction file, four role agents, a set of hooks that
-enforce the rules mechanically, one path-scoped rule file and three on-demand skills. *Instruction
-files advise; hooks enforce.* A CLI (`bd-board`) helps plan work.
+It is delivered as one small always-loaded instruction file, seven role agents (three for planning,
+four for implementation), a set of hooks that enforce the rules mechanically, one path-scoped rule
+file and three on-demand skills. *Instruction files advise; hooks enforce.* Two CLIs help: `bd-spec`
+renders a planned epic for review and `bd-board` shows what is ready to work.
 
 For installation, see `INSTALL.md`.
 
@@ -49,7 +51,21 @@ to, and nowhere else:
 
 # How Do I Use It?
 
-Start an orchestrated session as the orchestrator agent, so its rules are the session's system
+Two sessions, two agents. First a planning session, as the planner agent:
+
+```
+claude --agent planner
+> Add rate limiting to the public API
+```
+
+The planner interviews you until every behaviour has a concrete example, dispatches the `surveyor`
+to read the code it is about to make claims about, decomposes the work into leaf beads that carry
+acceptance criteria, design decisions, file ownership and an audit attack surface, dispatches the
+`spec-auditor` against the bead tree, and finally creates one `human` decision bead that every leaf
+depends on. `bd-spec <epic>` renders the result for you to read. Nothing is claimable until you run
+`bd human respond <gate>`. Small changes do not need this: write the bead yourself.
+
+Then an orchestrated session, as the orchestrator agent, so its rules are the session's system
 prompt and survive compaction:
 
 ```
@@ -116,6 +132,9 @@ Use context7 to look up product/API/framework documentation.
 | `tester` | edit tools, Bash; `isolation: worktree`; agent hook `guard-edit.sh tester` | writes only tests; tests must fail for the right reason first; artifacts block; `ESCALATION:` escape |
 | `coder` | edit tools, Bash; `isolation: worktree`; agent hook `guard-edit.sh coder` | TDD loop with the 10-attempt limit; never touches tests; challenge the brief; commit early; artifacts block; `ESCALATION:` escape |
 | `auditor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh auditor` | audit against the code, not the account; check the premise, the artifacts block, the tests against the criteria; report format; out-of-scope → own bead |
+| `planner` | `Agent(surveyor, spec-auditor, Explore)`, Bash, Read, Grep, Glob, AskUserQuestion, Skill | zero unlabelled assumptions; beads are the only output; three entry modes (change, feature, new app); one concrete example per behaviour; product calls → user or `human` bead, technical calls → recorded default with the rejected alternative; decomposition floor and ceiling; the per-bead content contract; spec-audit loop; the approval gate |
+| `surveyor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh surveyor` | one brief at a time (relevant code, domains, patterns); every finding a `path:symbol` pointer; absence claims carry their search; reports what exists, never designs; premise check first |
+| `spec-auditor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh spec-auditor` | reads the beads as the tester will; testability of each criterion, contradictions, ungrounded claims, undecided seams, size, decisions hidden as defaults; report format |
 
 The `tester` and `coder` worktrees are created by the harness from `isolation: worktree` and become
 the agent's working directory; the orchestrator must not create or assign a second one, and the
@@ -134,7 +153,7 @@ fails, remove it from the list and use the `Agent` tool's resume path.
 |---|---|---|
 | `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | no stash / pathspec checkout / hard reset / clean / push / pull / `--force` (except `worktree add -f`); a **subagent** may not merge, delete a branch or remove a worktree; **no commit on the default branch**, detached HEAD is a stop; **merge into the default branch asks the user**, and the prompt carries the artifacts sweep of the branch being merged; a worktree is removed only once its branch is merged; `branch -D` never; branch names `<type>/<id>` for branches created by hand (harness-generated worktree branches never pass through the hook); SemVer tags; **Conventional Commits** with a scope, ≤ 72-char subject, `!` ⇔ `BREAKING CHANGE:` |
 | `guard-bd.sh` | `PreToolUse`, `if: Bash(bd *)` | `--notes` (the replace form) denied, `--append-notes` only; no inline `$(...)` into fields except `$(cat <file>)`; `bd edit` denied; a subagent may not `bd close` or `--status=closed`; `bd label add <id> human` asks |
-| `guard-edit.sh` | `PreToolUse`, `Edit\|Write\|NotebookEdit\|MultiEdit` (global) and per-agent | global: an edit may not **add** a TODO/FIXME comment; `coder`: no test paths; `tester`: only test paths (asks otherwise); `auditor`: no Bash writes, no git/bd mutations |
+| `guard-edit.sh` | `PreToolUse`, `Edit\|Write\|NotebookEdit\|MultiEdit` (global) and per-agent | global: an edit may not **add** a TODO/FIXME comment; `coder`: no test paths; `tester`: only test paths (asks otherwise); `auditor`, `surveyor`, `spec-auditor`: no Bash writes, no git/bd mutations |
 | `guard-dispatch.sh` | `PreToolUse`, `Agent\|TodoWrite\|TaskCreate\|TaskUpdate` | in a beads project: no TodoWrite/TaskCreate; no `general-purpose` agent for work, use the role agents |
 | `require-artifacts-block.sh` | `PreToolUse`, `if: Bash(bd close *)` | the close reason (inline or `--reason-file`) carries a **valid** fenced json `artifacts` block |
 | `subagent-integrity.sh` | `SubagentStart`, `SubagentStop` | `coder`/`tester`: **stop is blocked** until the artifacts block exists and every claim is true on disk; other agents: warn on zero repository delta; read-only agent types skipped |
@@ -182,6 +201,15 @@ degrades silently in that mode.
 A CLI that reports which beads are ready to be worked, in four buckets: READY NOW (unblocked), IN
 FLIGHT (in_progress), READY NEXT (blocked only by READY NOW), NEEDS REVIEW (awaiting a human). Each
 bucket groups beads under their epics.
+
+## bd-spec
+
+`bd-spec <epic-id>` renders one planned epic as a specification: the epic's description (intent,
+scope, non-goals, decision log), every bead under it with its description, acceptance criteria,
+design and blockers, leaves in dependency order, and the `human` decision beads the leaves wait on.
+Like `bd-board` it is derived from `bd list --all --json` on every run and stores nothing, so the
+view cannot drift from the beads the tester and coder read. An empty field prints as `(none)` so a
+missing criterion is visible rather than silent.
 
 # The artifacts block
 

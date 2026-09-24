@@ -25,6 +25,9 @@ For what these components do and why, see `README.md`.
 ~/.claude/agents/coder.md
 ~/.claude/agents/tester.md
 ~/.claude/agents/auditor.md
+~/.claude/agents/planner.md
+~/.claude/agents/surveyor.md
+~/.claude/agents/spec-auditor.md
 ~/.claude/rules/learnings.md              path-scoped: loads only when touching learnings/**
 ~/.claude/skills/git-recovery/SKILL.md    on demand
 ~/.claude/skills/worktree-setup/SKILL.md  on demand
@@ -184,6 +187,9 @@ or, per project, `"agent": "orchestrator"` in the project's `.claude/settings.js
 still has every global hook; it simply lacks the orchestration judgement rules and cannot dispatch
 the role agents' restrictions on itself.
 
+Planning sessions work the same way with the planner agent: `claude --agent planner`. It dispatches
+`surveyor` and `spec-auditor`, which are custom agents and therefore pass `guard-dispatch.sh`.
+
 ## 5. Verify the install
 
 ```bash
@@ -206,15 +212,16 @@ bash tests/hooks.sh
 
 Then prove the hooks fire in a session: run a harmless `git status` (the guard is consulted), try
 `git commit` on your default branch (denied with the rule), and confirm `/agents` lists
-`orchestrator`, `coder`, `tester` and `auditor`.
+`orchestrator`, `coder`, `tester`, `auditor`, `planner`, `surveyor` and `spec-auditor`.
 
 **If a hook does not fire** but the script works when piped by hand and `jq -e` passes, the settings
 watcher has not picked up the change. Open `/hooks` once to reload, or restart the session.
 
-## 6. bd-board
+## 6. bd-board and bd-spec
 
-Copy `bd-board` into a directory on your PATH, such as `~/.local/bin`. Requires Python 3. Skip if
-you are not using `beads`.
+Copy `bd-board` and `bd-spec` into a directory on your PATH, such as `~/.local/bin`. Both require
+Python 3. The planner runs `bd-spec` to render an epic for your approval. Skip if you are not using
+`beads`.
 
 ## 7. PRIME.md
 
