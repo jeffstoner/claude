@@ -72,10 +72,10 @@ root="$(git rev-parse --show-toplevel)"
 # data loss). Hence `git -C "$root"` and "$root/$1".
 if [ "$ref" = "worktree" ]; then
   path_exists()  { [ -f "$root/$1" ]; }
-  file_has_sym() { grep -q -F -- "$2" "$root/$1" 2>/dev/null; }
+  file_has_sym() { grep -q -F -w -- "$2" "$root/$1" 2>/dev/null; }
 else
   path_exists()  { git -C "$root" cat-file -e "$ref:$1" 2>/dev/null; }
-  file_has_sym() { git -C "$root" grep -q -F -- "$2" "$ref" -- "$1" 2>/dev/null; }
+  file_has_sym() { git -C "$root" grep -q -F -w -- "$2" "$ref" -- "$1" 2>/dev/null; }
 fi
 
 # Built, not literal, so this file contains no triple-backtick (see NOTE above).
