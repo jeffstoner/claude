@@ -212,6 +212,10 @@ eb surveyor "grep -rn" allow 'grep -rn "def foo" src/'
 eb spec-auditor "bd create" deny 'bd create "x" -t task'
 eb spec-auditor "redirect to file" deny 'bd show gg-1 > spec.txt'
 eb spec-auditor "bd list --json | jq" allow 'bd list --parent gg-1 --json | jq .'
+eb refactor-reviewer "git commit" deny 'git commit -m x'
+eb refactor-reviewer "redirect to file" deny 'git diff main...HEAD > d.txt'
+eb refactor-reviewer "bd update" deny 'bd update gg-1 --append-notes x'
+eb refactor-reviewer "git diff" allow 'git diff main...HEAD'
 
 # ---- guard-dispatch.sh ---------------------------------------------------------
 R="$(mkrepo dispatch)"
@@ -301,6 +305,7 @@ run "stop: coder, block names missing symbol" block "$(pstop "$S" coder 'Done.' 
 run "stop: auditor skipped" allow "$(pstop "$S" auditor 'Done.' false)" subagent-integrity.sh stop
 run "stop: surveyor skipped" allow "$(pstop "$S" surveyor 'Done.' false)" subagent-integrity.sh stop
 run "stop: spec-auditor skipped" allow "$(pstop "$S" spec-auditor 'Done.' false)" subagent-integrity.sh stop
+run "stop: refactor-reviewer skipped" allow "$(pstop "$S" refactor-reviewer 'Done.' false)" subagent-integrity.sh stop
 # claims are verified in the agent's own worktree (payload cwd), never the main checkout
 W="$(mkrepo stopwt)"; git -C "$W" switch -q -c feat/gg-7
 WT="$W/.claude/worktrees/agent-a9"; git -C "$W" worktree add -q "$WT" -b worktree-agent-a9

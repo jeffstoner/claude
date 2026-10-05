@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ~/.claude/hooks/guard-edit.sh  [global|coder|tester|auditor|surveyor|spec-auditor]
+# ~/.claude/hooks/guard-edit.sh  [global|coder|tester|auditor|surveyor|spec-auditor|refactor-reviewer]
 #
 # global (default; registered in settings.json, matcher Edit|Write|NotebookEdit|MultiEdit):
 #   The TODO ban. Deny an edit that ADDS a TODO/FIXME comment marker. Work still
@@ -19,7 +19,7 @@
 #   source files (Rust #[cfg(test)], doctests); a project can extend the test set
 #   with CLAUDE.md lines: Test-paths: <glob>
 #
-# auditor / surveyor / spec-auditor (agent-scoped, matcher Bash):
+# auditor / surveyor / spec-auditor / refactor-reviewer (agent-scoped, matcher Bash):
 #   A read-only role changes nothing. Edit/Write are removed by disallowedTools;
 #   this catches the Bash routes: redirections, tee, sed -i, git/bd mutations.
 set -uo pipefail
@@ -142,7 +142,7 @@ case "$role" in
         fi ;;
     esac
     ;;
-  auditor|surveyor|spec-auditor)
+  auditor|surveyor|spec-auditor|refactor-reviewer)
     [ "$tool" = "Bash" ] || exit 0
     if printf '%s' "$code" | grep -qE '(^|[[:space:]({])git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(add|commit|merge|rebase|cherry-pick|reset|checkout|switch|restore|rm|mv|stash|worktree|branch[[:space:]]+-|tag|push|pull|clean)\b'; then
       deny "BLOCKED: the $role changes nothing. Read-only git only (log, show, diff, status, grep, blame). Report findings; the agent that dispatched you routes them."

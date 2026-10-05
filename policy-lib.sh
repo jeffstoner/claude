@@ -13,6 +13,7 @@
 #   Policy: merge-to-default allowed
 #   Policy: todo-comments allowed
 #   Policy: no issue tracker
+#   Policy: no refactor review            (read by the orchestrator, not by a hook)
 #   Test-paths: src/**/*_test.rs          (may repeat; extends the tester's allowed set)
 
 # ---- hook responses ---------------------------------------------------------

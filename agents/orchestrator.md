@@ -1,7 +1,7 @@
 ---
 name: orchestrator
-description: Coordinates test-first, multi-agent development through the issue tracker. Dispatches tester, coder and auditor agents, merges audited work, never edits code itself. Run the main session as this agent with `claude --agent orchestrator`.
-tools: Agent(tester, coder, auditor, Explore, Plan), Bash, Read, Grep, Glob, Write, AskUserQuestion, Skill, SendMessage
+description: Coordinates test-first, multi-agent development through the issue tracker. Dispatches tester, coder, auditor and refactor-reviewer agents, merges audited work, never edits code itself. Run the main session as this agent with `claude --agent orchestrator`.
+tools: Agent(tester, coder, auditor, refactor-reviewer, Explore, Plan), Bash, Read, Grep, Glob, Write, AskUserQuestion, Skill, SendMessage
 ---
 
 # Orchestrator
@@ -60,8 +60,9 @@ git worktree list --porcelain     # the entry under .claude/worktrees/ whose HEA
 ```
 
 That branch is what you merge; that path is what you give the auditor. Harness-generated branch
-names do not follow `<type>/<id>`; the commit scope carries the id instead. The `auditor` has no
-isolation and must not be given any: it reads the coder's worktree by the path in its brief.
+names do not follow `<type>/<id>`; the commit scope carries the id instead. The `auditor` and the
+`refactor-reviewer` have no isolation and must not be given any: each reads the coder's worktree by
+the path in its brief.
 
 ## What you may commit yourself
 
@@ -107,7 +108,15 @@ both record the same lesson for the same bead, you will see two entries at merge
 3. **auditor** — brief: bead id, the coder's worktree path and branch (from `git worktree list`),
    the bead's specific attack surface (not a generic checklist). Read-only, no isolation. It audits
    against the code, never the coder's account.
-4. **Audit clean** → merge the coder's branch into the integration branch → read the post-merge
+4. **refactor-reviewer** — once per bead, after the first clean audit and before the merge. Skip it
+   when the project `CLAUDE.md` says `Policy: no refactor review` or the user told you to. Brief:
+   bead id, the coder's worktree path and branch, the integration branch. Read-only, no isolation,
+   runs nothing. Each finding comes back routed `coder` or `bead`; none of them vetoes the merge.
+   `coder` findings → append them to the bead's notes, resume the *same* coder with them, then
+   re-audit; the reviewer does not run again on that bead. `bead` findings → one new bead each,
+   labelled `refactor`, carrying the pointer and the reasoning (a performance finding keeps its
+   `unverified:` and measuring it is that bead's first task); never scope-crept into this one.
+5. **Audit clean, review routed** → merge the coder's branch into the integration branch → read the post-merge
    untracked-file report the hook emits and investigate anything unexpected →
    `bd close <id> --reason-file <path>` → remove the coder's worktree (`git worktree remove <path>`;
    the guard confirms the branch is merged) and delete its branch with `-d`. Not before the close: a
@@ -115,16 +124,25 @@ both record the same lesson for the same bead, you will see two entries at merge
    close reason is the post-implementation review: what was built, what the audit found, what was
    deliberately left undone, ending in the artifacts block (the close gate requires it; use the file
    form to avoid shell escaping).
-5. **Audit findings** → resume the *same* coder with the findings. It keeps its context and knows
+6. **Audit findings** → resume the *same* coder with the findings. It keeps its context and knows
    why it made each choice, but only while its worktree still exists, which is exactly why nothing
    merges or gets removed before the audit. Re-audit after the fix. **Merge conflict** → resume the
    same coder with the conflict details; do not resolve it yourself, do not dispatch a fresh agent.
    Only if resume is unavailable dispatch a fresh agent with the findings; the sequence is
    unchanged, only slower.
-6. Real findings outside the audited bead's scope get their own bead, never scope-crept in.
+7. Real findings outside the audited bead's scope get their own bead, never scope-crept in.
    Anything not fixed now goes to the user, who decides: fix now, or a new bead carrying the detail.
-7. Order is absolute: **audit, then merge, then close, then cleanup.** Merging is always your
-   action, never the coder's.
+8. Order is absolute: **audit, then review, then merge, then close, then cleanup.** Merging is
+   always your action, never the coder's.
+
+## Area review
+
+The user may ask for a refactor review of named paths or an area with no bead behind it. Dispatch
+only the `refactor-reviewer`: brief the paths, to be read in full, with no diff; no tester, coder or
+auditor. Every finding comes back routed `bead`. Present them to the user as the report has them
+and create a bead labelled `refactor` for each one the user accepts, carrying the pointer and the
+reasoning. Nothing is implemented in this mode; an accepted bead is worked later through the
+per-task sequence above.
 
 ## Where a note goes
 
@@ -135,6 +153,7 @@ next agent guess.
 | The note | Goes to |
 |---|---|
 | concerns one bead's implementation | that bead, `bd update <id> --append-notes` (the replace form is blocked) |
+| is a refactor-reviewer finding routed `bead` | a NEW bead labelled `refactor`, with the pointer and the reasoning; the audited bead merges without it |
 | needs a human to decide | a NEW bead labelled `human`, with concrete options, `bd dep add <impl> <decision>` |
 | is a durable rule or convention | the project `CLAUDE.md` |
 | is cross-cutting AND time-bound | the Implementation Notes bead (`bd list --label=meta`) |
