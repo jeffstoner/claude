@@ -151,7 +151,10 @@ case "$role" in
       deny "BLOCKED: the $role does not write to the tracker. Put findings in your final report; the agent that dispatched you records them (in the bead, or as new beads for out-of-scope findings)."
     fi
     if bash_writes "$code"; then
-      deny "BLOCKED: the $role changes nothing in the repository — no redirections, tee, sed -i, cp/mv/rm/touch. Read code, run tests; report what you find."
+      case "$role" in
+        refactor-reviewer) deny "BLOCKED: the $role changes nothing in the repository — no redirections, tee, sed -i, cp/mv/rm/touch — and runs nothing, not even the tests; the auditor already did. Read code; report what you find." ;;
+        *) deny "BLOCKED: the $role changes nothing in the repository — no redirections, tee, sed -i, cp/mv/rm/touch. Read code, run tests; report what you find." ;;
+      esac
     fi
     ;;
 esac
