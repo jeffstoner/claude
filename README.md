@@ -10,8 +10,8 @@ provides structure for agents to operate under by defining:
 * how to use Git
 * recording "lessons learned" for future agents to reference
 
-It is delivered as one small always-loaded instruction file, seven role agents (three for planning,
-four for implementation), a set of hooks that enforce the rules mechanically, one path-scoped rule
+It is delivered as one small always-loaded instruction file, eight role agents (three for planning,
+five for implementation), a set of hooks that enforce the rules mechanically, one path-scoped rule
 file and three on-demand skills. *Instruction files advise; hooks enforce.* Two CLIs help: `bd-spec`
 renders a planned epic for review and `bd-board` shows what is ready to work.
 
@@ -74,8 +74,8 @@ claude --agent orchestrator
 ```
 
 The orchestrator reads the beads, resolves cross-task ambiguity, dispatches the `tester` for each
-bead, merges the tests, dispatches the `coder` in its own worktree, dispatches the `auditor`, and
-only then merges, cleans up and closes. You can hand any piece to Claude or keep it: write the
+bead, merges the tests, dispatches the `coder` in its own worktree, dispatches the `auditor` and
+the `refactor-reviewer`, and only then merges, cleans up and closes. You can hand any piece to Claude or keep it: write the
 beads yourself, write the tests yourself, audit yourself. But anything Claude needs must be in
 beads: that is how dependencies, specification, completion and audit are recorded.
 
@@ -106,6 +106,7 @@ Policy: commit-on-default allowed        # throw-away repos: work directly on th
 Policy: merge-to-default allowed         # merge into the default branch without a prompt
 Policy: todo-comments allowed            # lift the TODO-comment ban
 Policy: no issue tracker                 # no beads; NOTICKET scope; artifacts block in commit bodies
+Policy: no refactor review               # skip the per-bead refactor review (orchestrator-honoured, no hook)
 Test-paths: src/**/*_test.rs             # extend the set of paths the tester may write (repeatable)
 ```
 
@@ -128,10 +129,11 @@ Use context7 to look up product/API/framework documentation.
 
 | Agent | Tools | Body carries |
 |---|---|---|
-| `orchestrator` | `Agent(tester, coder, auditor, Explore, Plan)`, Bash, Read, Grep, Glob, Write, Skill | no unverified assertions; resolve cross-task ambiguity first; premise-in-tree before dispatch; audit → merge → close → cleanup; harness-created worktrees, never hand-assigned; resume the same coder for findings and conflicts; note routing; tracking-off mode; default-branch resolution |
+| `orchestrator` | `Agent(tester, coder, auditor, refactor-reviewer, Explore, Plan)`, Bash, Read, Grep, Glob, Write, Skill | no unverified assertions; resolve cross-task ambiguity first; premise-in-tree before dispatch; audit → merge → close → cleanup; harness-created worktrees, never hand-assigned; resume the same coder for findings and conflicts; note routing; tracking-off mode; default-branch resolution |
 | `tester` | edit tools, Bash; `isolation: worktree`; agent hook `guard-edit.sh tester` | writes only tests; tests must fail for the right reason first; artifacts block; `ESCALATION:` escape |
 | `coder` | edit tools, Bash; `isolation: worktree`; agent hook `guard-edit.sh coder` | TDD loop with the 10-attempt limit; never touches tests; challenge the brief; commit early; artifacts block; `ESCALATION:` escape |
 | `auditor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh auditor` | audit against the code, not the account; check the premise, the artifacts block, the tests against the criteria; report format; out-of-scope → own bead |
+| `refactor-reviewer` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh refactor-reviewer` | runs after a clean audit, before the merge, or alone on a named area; reads the diff plus touched files in full; maintainability first, then patterns only where the smell already exists twice, then performance as `unverified:`; never runs code; routes each finding `coder` or `bead`; never vetoes a merge |
 | `planner` | `Agent(surveyor, spec-auditor, Explore)`, Bash, Read, Grep, Glob, AskUserQuestion, Skill | zero unlabelled assumptions; beads are the only output; three entry modes (change, feature, new app); one concrete example per behaviour; product calls → user or `human` bead, technical calls → recorded default with the rejected alternative; decomposition floor and ceiling; the per-bead content contract; spec-audit loop; the approval gate |
 | `surveyor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh surveyor` | one brief at a time (relevant code, domains, patterns); every finding a `path:symbol` pointer; absence claims carry their search; reports what exists, never designs; premise check first |
 | `spec-auditor` | Bash, Read, Grep, Glob only; agent hook `guard-edit.sh spec-auditor` | reads the beads as the tester will; testability of each criterion, contradictions, ungrounded claims, undecided seams, size, decisions hidden as defaults; report format |
@@ -153,7 +155,7 @@ fails, remove it from the list and use the `Agent` tool's resume path.
 |---|---|---|
 | `guard-git.sh` | `PreToolUse`, `if: Bash(git *)` | no stash / pathspec checkout / hard reset / clean / push / pull / `--force` (except `worktree add -f`); a **subagent** may not merge, delete a branch or remove a worktree; **no commit on the default branch**, detached HEAD is a stop; **merge into the default branch asks the user**, and the prompt carries the artifacts sweep of the branch being merged; a worktree is removed only once its branch is merged; `branch -D` never; branch names `<type>/<id>` for branches created by hand (harness-generated worktree branches never pass through the hook); SemVer tags; **Conventional Commits** with a scope, ≤ 72-char subject, `!` ⇔ `BREAKING CHANGE:` |
 | `guard-bd.sh` | `PreToolUse`, `if: Bash(bd *)` | `--notes` (the replace form) denied, `--append-notes` only; no inline `$(...)` into fields except `$(cat <file>)`; `bd edit` denied; a subagent may not `bd close` or `--status=closed`; `bd label add <id> human` asks |
-| `guard-edit.sh` | `PreToolUse`, `Edit\|Write\|NotebookEdit\|MultiEdit` (global) and per-agent | global: an edit may not **add** a TODO/FIXME comment; `coder`: no test paths; `tester`: only test paths (asks otherwise); `auditor`, `surveyor`, `spec-auditor`: no Bash writes, no git/bd mutations |
+| `guard-edit.sh` | `PreToolUse`, `Edit\|Write\|NotebookEdit\|MultiEdit` (global) and per-agent | global: an edit may not **add** a TODO/FIXME comment; `coder`: no test paths; `tester`: only test paths (asks otherwise); `auditor`, `surveyor`, `spec-auditor`, `refactor-reviewer`: no Bash writes, no git/bd mutations |
 | `guard-dispatch.sh` | `PreToolUse`, `Agent\|TodoWrite\|TaskCreate\|TaskUpdate` | in a beads project: no TodoWrite/TaskCreate; no `general-purpose` agent for work, use the role agents |
 | `require-artifacts-block.sh` | `PreToolUse`, `if: Bash(bd close *)` | the close reason (inline or `--reason-file`) carries a **valid** fenced json `artifacts` block |
 | `subagent-integrity.sh` | `SubagentStart`, `SubagentStop` | `coder`/`tester`: **stop is blocked** until the artifacts block exists and every claim is true on disk; other agents: warn on zero repository delta; read-only agent types skipped |

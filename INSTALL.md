@@ -28,6 +28,7 @@ For what these components do and why, see `README.md`.
 ~/.claude/agents/planner.md
 ~/.claude/agents/surveyor.md
 ~/.claude/agents/spec-auditor.md
+~/.claude/agents/refactor-reviewer.md
 ~/.claude/rules/learnings.md              path-scoped: loads only when touching learnings/**
 ~/.claude/skills/git-recovery/SKILL.md    on demand
 ~/.claude/skills/worktree-setup/SKILL.md  on demand
@@ -212,7 +213,8 @@ bash tests/hooks.sh
 
 Then prove the hooks fire in a session: run a harmless `git status` (the guard is consulted), try
 `git commit` on your default branch (denied with the rule), and confirm `/agents` lists
-`orchestrator`, `coder`, `tester`, `auditor`, `planner`, `surveyor` and `spec-auditor`.
+`orchestrator`, `coder`, `tester`, `auditor`, `refactor-reviewer`, `planner`, `surveyor` and
+`spec-auditor`.
 
 **If a hook does not fire** but the script works when piped by hand and `jq -e` passes, the settings
 watcher has not picked up the change. Open `/hooks` once to reload, or restart the session.
@@ -234,7 +236,8 @@ Copy it to the `.beads` directory of each repo that uses beads. Skip otherwise.
 - **All hooks**: `"disableAllHooks": true`.
 - **Per project**: the policy lines in the project `CLAUDE.md` (see `README.md`): `Default branch:`,
   `Policy: commit-on-default allowed`, `Policy: merge-to-default allowed`,
-  `Policy: todo-comments allowed`, `Policy: no issue tracker`, `Test-paths:`.
+  `Policy: todo-comments allowed`, `Policy: no issue tracker`, `Policy: no refactor review`,
+  `Test-paths:`.
 - **Subagent integrity only, without editing settings**:
   - `CLAUDE_SKIP_SUBAGENT_INTEGRITY=1` silences both the zero-delta warning and the artifacts gate.
   - `CLAUDE_SUBAGENT_INTEGRITY_TRUST_DISCLAIMERS=1` stays quiet when an agent explicitly reports
