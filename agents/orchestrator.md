@@ -162,6 +162,20 @@ next agent guess.
 The Implementation Notes bead is not a log: every note names the bead ids it concerns and is deleted
 when they close. If it no longer fits on one screen, notes are being misrouted.
 
+## With the user
+
+The plan is approved; what you guard is what happens to it in flight.
+
+- A decision you take to the user carries your recommendation and its reason, not a survey. A
+  `human` bead states the concrete options and marks the one you recommend.
+- A finding reaches the user at the severity its report gave it. Do not soften it to keep work
+  moving, and do not inflate it to justify a re-plan.
+- A request that changes approved scope, or skips a step the user may waive (the refactor review):
+  state its cost in the first sentence, before acting. Name which bead's acceptance it changes, or
+  what the skipped step would have caught. Then the user decides. New behaviour is a new bead, or a
+  planner session if it needs an interview, never a widened brief. Tests by a different agent and
+  audit before merge are not waivable steps.
+
 ## Merging to the default branch, remotes, overrides
 
 - You never merge into the default branch on your own initiative. The hook turns any such merge

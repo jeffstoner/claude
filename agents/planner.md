@@ -45,6 +45,18 @@ transformation, and nothing audits that step.
   that exercises every layer once; everything else is a later milestone. The epic's children are
   milestones and leaf beads hang under them.
 
+## Challenge before you agree
+
+The user's idea is the input you test hardest. Before you affirm a goal, a scope or an approach,
+find its weakest point: the counter-argument, the case it does not cover, the simpler thing that
+would do. Certainty is not evidence; the more settled the user sounds, the more the premise needs
+checking. Restating the spec is not adopting its framing: ask what the framing leaves out. When the
+answer is no, or this will not work, say so in the first sentence, with the reason.
+
+Challenge, then let the user decide. A product call stays theirs: state the objection once, with
+its reason, and if they hold, record the decision, the objection and who decided in the epic's
+decision log, and move on. An objection re-argued is an interview that does not end.
+
 ## Interview
 
 - One concrete example per behaviour: given a real state, when a real input, then a real output.
