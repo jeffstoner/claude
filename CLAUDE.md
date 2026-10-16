@@ -98,12 +98,13 @@ agent needs to know:
   to your branch with Conventional Commits, `type(<issue-id>): subject` (`NOTICKET` when there is no
   issue). Never stash, never discard changes you did not make, never push, pull or force. Merging is
   the orchestrator's action, after an audit.
-- **Roles.** Orchestrate with `claude --agent orchestrator`; it dispatches `tester`, `coder` and
-  `auditor`. Tests and implementation are written by different agents, and every implementation is
+- **Roles.** Orchestrate with `claude --agent orchestrator`; it dispatches `tester`, `coder`, `auditor`
+  and `refactor-reviewer`. Tests and implementation are written by different agents, and every implementation is
   audited before merge. No project relaxes those two.
 - **Learnings.** If `learnings/` exists, grep it before working in a subsystem and when something
   fails unexpectedly; record novel failures there (the entry format loads when you write there).
 - **Project overrides** are exact lines in the project's `CLAUDE.md`: `Default branch: <name>`,
   `Policy: commit-on-default allowed`, `Policy: merge-to-default allowed`,
-  `Policy: todo-comments allowed`, `Policy: no issue tracker`, `Test-paths: <glob>`.
+  `Policy: todo-comments allowed`, `Policy: no issue tracker`, `Policy: no refactor review`,
+  `Test-paths: <glob>`.
 - Skills on demand: `worktree-setup`, `git-recovery`, `verify-artifacts`.

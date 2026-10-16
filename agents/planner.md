@@ -84,7 +84,7 @@ the brief. A plan that dictates the algorithm weakens both the coder's challenge
 Split until each leaf is small enough that one tester can write its tests from the bead alone and
 one coder can implement it without touching a sibling's files. Stop splitting when a leaf's
 criteria are only meaningful together with a sibling's. Every leaf costs a tester, a coder, an
-auditor and two merges, so the floor matters as much as the ceiling.
+auditor, a refactor review and two merges, so the floor matters as much as the ceiling.
 
 Decide the seams here, not at dispatch time: shared versus duplicated logic, which bead owns an
 artifact another depends on, file ownership, a naming or contract convention two beads share.
