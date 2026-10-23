@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ~/.claude/hooks/guard-edit.sh  [global|coder|tester|auditor|surveyor|spec-auditor|refactor-reviewer]
+# ~/.claude/hooks/guard-edit.sh  [global|coder|tester|docs-writer|auditor|surveyor|spec-auditor|refactor-reviewer]
 #
 # global (default; registered in settings.json, matcher Edit|Write|NotebookEdit|MultiEdit):
 #   The TODO ban. Deny an edit that ADDS a TODO/FIXME comment marker. Work still
@@ -18,6 +18,13 @@
 #   The tester side asks instead of denying, because some languages keep tests in
 #   source files (Rust #[cfg(test)], doctests); a project can extend the test set
 #   with CLAUDE.md lines: Test-paths: <glob>
+#
+# docs-writer (agent-scoped, same matcher as coder/tester):
+#   Docs, not code. Writes to the default docs set (docs/**, doc/adr/**, top-level
+#   README*/CONTRIBUTING*/CHANGELOG*) pass; any other repository path asks, because
+#   a .md file is not necessarily docs (agent definitions, skills) and an .html file
+#   is often application code. A project extends the set with CLAUDE.md lines:
+#   Docs-paths: <glob>
 #
 # auditor / surveyor / spec-auditor / refactor-reviewer (agent-scoped, matcher Bash):
 #   A read-only role changes nothing. Edit/Write are removed by disallowedTools;
@@ -42,14 +49,25 @@ TEST_RE='(^|/)(tests?|__tests__|spec|fixtures|testdata)/|(^|/)test_[^/]+\.py$|_t
 glob_to_re() {
   printf '%s' "$1" | sed -E 's/[.+^$(){}|]/\\&/g; s/\*\*\//\x01/g; s/\*\*/\x02/g; s/\*/[^\/]*/g; s/\?/./g; s/\x01/(.*\/)?/g; s/\x02/.*/g'
 }
-is_test_path() {
+# matches_policy_globs <path> <policy-fn>: does the path match a glob the project declared?
+matches_policy_globs() {
   local p="$1" g
-  printf '%s' "$p" | grep -qE "$TEST_RE" && return 0
   while IFS= read -r g; do
     [ -z "$g" ] && continue
     printf '%s' "$p" | grep -qE "^$(glob_to_re "$g")$" && return 0
-  done < <(policy_test_paths)
+  done < <("$2")
   return 1
+}
+is_test_path() {
+  printf '%s' "$1" | grep -qE "$TEST_RE" && return 0
+  matches_policy_globs "$1" policy_test_paths
+}
+
+# ---- docs-path classification -----------------------------------------------
+DOCS_RE='^docs/|^doc/adr/|^(README|CONTRIBUTING|CHANGELOG)[^/]*$'
+is_docs_path() {
+  printf '%s' "$1" | grep -qE "$DOCS_RE" && return 0
+  matches_policy_globs "$1" policy_docs_paths
 }
 
 # ---- TODO ban (global) ---------------------------------------------------------
@@ -91,15 +109,15 @@ in_repo_path() {
     *)  return 0 ;;
   esac
 }
-# Any in-repo path token in the command that is NOT a test path? (Used by the tester
-# side; a write to a scratch file outside the repo is fine.)
-bash_mentions_repo_nontest_path() {
-  local tok
+# bash_mentions_repo_path_outside "<command>" <classifier>: any in-repo path token the
+# classifier (is_test_path, is_docs_path) rejects? A scratch file outside the repo is fine.
+bash_mentions_repo_path_outside() {
+  local tok classify="$2"
   for tok in $(printf '%s' "$1" | tr -d '"'"'" | tr '[:space:]' '\n'); do
     case "$tok" in -*|""|*=*) continue ;; esac
     printf '%s' "$tok" | grep -qE '/|\.[A-Za-z0-9]+$' || continue      # path-shaped only
     in_repo_path "$tok" || continue
-    is_test_path "${tok#"$root"/}" && continue
+    "$classify" "${tok#"$root"/}" && continue
     return 0
   done
   return 1
@@ -136,9 +154,22 @@ case "$role" in
           ask "You are the tester; '$rel' does not look like a test file. The tester writes ONLY tests (and test fixtures/config) — never implementation. If this language keeps tests inside source files, the project can declare them with a CLAUDE.md line 'Test-paths: <glob>'. Approve only if this file genuinely is test code."
         fi ;;
       Bash)
-        if bash_writes "$code" && bash_mentions_repo_nontest_path "$code" \
+        if bash_writes "$code" && bash_mentions_repo_path_outside "$code" is_test_path \
            && ! printf '%s' "$code" | grep -qE '(^|[[:space:]({])(git|bd)([[:space:]]|$)'; then
           ask "This command appears to write to a non-test path inside the repository. The tester writes only tests. Approve only if the target is test code. (Scratch files outside the repository are fine.)"
+        fi ;;
+    esac
+    ;;
+  docs-writer)
+    case "$tool" in
+      Edit|Write|NotebookEdit|MultiEdit)
+        if [ -n "$rel" ] && in_repo_path "$file" && ! is_docs_path "$rel"; then
+          ask "You are the docs-writer; '$rel' is outside the project's docs paths (docs/**, doc/adr/**, top-level README*, CONTRIBUTING*, CHANGELOG*, plus any CLAUDE.md 'Docs-paths: <glob>' lines). Docstrings and comments in source belong to the coder; agent and skill .md files are code. Approve only if this file genuinely is documentation."
+        fi ;;
+      Bash)
+        if bash_writes "$code" && bash_mentions_repo_path_outside "$code" is_docs_path \
+           && ! printf '%s' "$code" | grep -qE '(^|[[:space:]({])(git|bd)([[:space:]]|$)'; then
+          ask "This command appears to write to a path outside the project's docs paths. The docs-writer writes only documentation. Approve only if the target is documentation. (Scratch files outside the repository are fine.)"
         fi ;;
     esac
     ;;
