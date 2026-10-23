@@ -279,6 +279,8 @@ printf 'Done, no block.\n' > "$A/bad.md"
 run "artifacts: --reason-file valid" allow "$(pbash "$A" 'bd close gg-1 --reason-file good.md')" require-artifacts-block.sh
 run "artifacts: --reason-file no block" deny "$(pbash "$A" 'bd close gg-1 --reason-file bad.md')" require-artifacts-block.sh
 run "artifacts: --reason-file missing" allow "$(pbash "$A" 'bd close gg-1 --reason-file nope.md')" require-artifacts-block.sh
+printf 'Docs.\n\n%sjson\n{"artifacts":[{"path":"docs/guide.md","symbols":[]}]}\n%s\n' "$F" "$F" > "$A/docs.md"
+run "artifacts: paths-only block (docs bead close)" allow "$(pbash "$A" 'bd close gg-1 --reason-file docs.md')" require-artifacts-block.sh
 run "artifacts: inline --reason" deny "$(pbash "$A" 'bd close gg-1 --reason "done"')" require-artifacts-block.sh
 
 # ---- bd-verify-artifacts.sh ----------------------------------------------------
@@ -287,6 +289,12 @@ cp "$A/good.md" "$V/good.txt"
 printf '%sjson\n{"artifacts":[{"path":"src/m.py","symbols":["nope_sym"]}]}\n%s\n' "$F" "$F" > "$V/bad.txt"
 out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$V/good.txt")"; rc=$?
 check "verify: existing symbol exits 0" 0 "$rc"
+mkdir -p "$V/docs"; printf '# Guide\n' > "$V/docs/guide.md"
+out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$A/docs.md")"; rc=$?
+check "verify: paths-only block, file present, exits 0" 0 "$rc"
+rm -f "$V/docs/guide.md"
+out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$A/docs.md")"; rc=$?
+check "verify: paths-only block, file absent, exits 1" 1 "$rc"
 out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$V/bad.txt")"; rc=$?
 check "verify: missing symbol exits 1" 1 "$rc"
 check "verify: missing symbol reports MISSING" yes "$(printf '%s' "$out" | grep -q MISSING && echo yes || echo no)"

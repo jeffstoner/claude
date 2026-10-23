@@ -48,6 +48,11 @@ at it.
   no bead records.
 - **The fence.** The epic has non-goals; each leaf has `Owns:`, `Others:` and
   `Audit attack surface:`.
+- **Docs leaves** (labelled `docs`) have no acceptance criteria and no attack surface; that is not
+  a finding. Check instead: `Doc:` names a type, an audience and a target path; `Covers:` names the
+  code leaves and a `bd dep` exists on each; `Owns:` holds only docs paths. A docs leaf that needs a
+  source or test change, or a leaf changing user-visible behaviour with no docs leaf covering it,
+  is a finding.
 
 ## Report
 
