@@ -216,6 +216,30 @@ eb refactor-reviewer "git commit" deny 'git commit -m x'
 eb refactor-reviewer "redirect to file" deny 'git diff main...HEAD > d.txt'
 eb refactor-reviewer "bd update" deny 'bd update gg-1 --append-notes x'
 eb refactor-reviewer "git diff" allow 'git diff main...HEAD'
+# docs-writer: default docs set writes freely, anything else in the repo asks
+mkdir -p "$R/docs" "$R/agents"
+e docs-writer "write docs/guide.md" allow "$(pwrite "$R" "$R/docs/guide.md" x)"
+e docs-writer "write docs/adr/0001-x.md" allow "$(pwrite "$R" "$R/docs/adr/0001-x.md" x)"
+e docs-writer "write doc/adr/0001-x.md" allow "$(pwrite "$R" "$R/doc/adr/0001-x.md" x)"
+e docs-writer "write top-level README.md" allow "$(pwrite "$R" "$R/README.md" x)"
+e docs-writer "write top-level README.rst" allow "$(pwrite "$R" "$R/README.rst" x)"
+e docs-writer "write top-level CONTRIBUTING.md" allow "$(pwrite "$R" "$R/CONTRIBUTING.md" x)"
+e docs-writer "write top-level CHANGELOG.md" allow "$(pwrite "$R" "$R/CHANGELOG.md" x)"
+e docs-writer "edit nested README.md" ask "$(pedit "$R" "$R/src/README.md" a b)"
+e docs-writer "write doc/other.md (only doc/adr/ is default)" ask "$(pwrite "$R" "$R/doc/other.md" x)"
+e docs-writer "write agents/x.md (markdown is not docs)" ask "$(pwrite "$R" "$R/agents/x.md" x)"
+e docs-writer "edit src file" ask "$(pedit "$R" "$R/src/mod.py" a b)"
+e docs-writer "write scratch file outside repo" allow "$(pwrite "$R" "$O/notes.md" x)"
+eb docs-writer "redirect into docs/" allow 'echo x > docs/guide.md'
+eb docs-writer "redirect into src/" ask 'echo x > src/mod.py'
+eb docs-writer "git add && commit" allow 'git add docs && git commit -m "docs(gg-1): x"'
+eb docs-writer "bd append-notes" allow $'bd update gg-1 --append-notes "$(cat <<\'EOF\'\nSee src/mod.py:run\nEOF\n)"'
+eb docs-writer "grep source" allow 'grep -rn "def run" src/'
+printf 'Docs-paths: agents/*.md\n' > "$R/CLAUDE.md"
+e docs-writer "write Docs-paths match" allow "$(pwrite "$R" "$R/agents/x.md" x)"
+e docs-writer "write Docs-paths one level too deep" ask "$(pwrite "$R" "$R/agents/sub/x.md" x)"
+e coder "Docs-paths does not make a test path" allow "$(pwrite "$R" "$R/agents/x.md" x)"
+rm -f "$R/CLAUDE.md"
 
 # ---- guard-dispatch.sh ---------------------------------------------------------
 R="$(mkrepo dispatch)"
@@ -255,6 +279,8 @@ printf 'Done, no block.\n' > "$A/bad.md"
 run "artifacts: --reason-file valid" allow "$(pbash "$A" 'bd close gg-1 --reason-file good.md')" require-artifacts-block.sh
 run "artifacts: --reason-file no block" deny "$(pbash "$A" 'bd close gg-1 --reason-file bad.md')" require-artifacts-block.sh
 run "artifacts: --reason-file missing" allow "$(pbash "$A" 'bd close gg-1 --reason-file nope.md')" require-artifacts-block.sh
+printf 'Docs.\n\n%sjson\n{"artifacts":[{"path":"docs/guide.md","symbols":[]}]}\n%s\n' "$F" "$F" > "$A/docs.md"
+run "artifacts: paths-only block (docs bead close)" allow "$(pbash "$A" 'bd close gg-1 --reason-file docs.md')" require-artifacts-block.sh
 run "artifacts: inline --reason" deny "$(pbash "$A" 'bd close gg-1 --reason "done"')" require-artifacts-block.sh
 
 # ---- bd-verify-artifacts.sh ----------------------------------------------------
@@ -263,6 +289,12 @@ cp "$A/good.md" "$V/good.txt"
 printf '%sjson\n{"artifacts":[{"path":"src/m.py","symbols":["nope_sym"]}]}\n%s\n' "$F" "$F" > "$V/bad.txt"
 out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$V/good.txt")"; rc=$?
 check "verify: existing symbol exits 0" 0 "$rc"
+mkdir -p "$V/docs"; printf '# Guide\n' > "$V/docs/guide.md"
+out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$A/docs.md")"; rc=$?
+check "verify: paths-only block, file present, exits 0" 0 "$rc"
+rm -f "$V/docs/guide.md"
+out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$A/docs.md")"; rc=$?
+check "verify: paths-only block, file absent, exits 1" 1 "$rc"
 out="$(cd "$V" && "$HOOKS/bd-verify-artifacts.sh" --ref worktree --text-file "$V/bad.txt")"; rc=$?
 check "verify: missing symbol exits 1" 1 "$rc"
 check "verify: missing symbol reports MISSING" yes "$(printf '%s' "$out" | grep -q MISSING && echo yes || echo no)"
@@ -306,6 +338,7 @@ run "stop: auditor skipped" allow "$(pstop "$S" auditor 'Done.' false)" subagent
 run "stop: surveyor skipped" allow "$(pstop "$S" surveyor 'Done.' false)" subagent-integrity.sh stop
 run "stop: spec-auditor skipped" allow "$(pstop "$S" spec-auditor 'Done.' false)" subagent-integrity.sh stop
 run "stop: refactor-reviewer skipped" allow "$(pstop "$S" refactor-reviewer 'Done.' false)" subagent-integrity.sh stop
+run "stop: docs-writer not artifacts-gated" allow "$(pstop "$S" docs-writer 'Done.' false)" subagent-integrity.sh stop
 # claims are verified in the agent's own worktree (payload cwd), never the main checkout
 W="$(mkrepo stopwt)"; git -C "$W" switch -q -c feat/gg-7
 WT="$W/.claude/worktrees/agent-a9"; git -C "$W" worktree add -q "$WT" -b worktree-agent-a9

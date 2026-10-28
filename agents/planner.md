@@ -86,6 +86,12 @@ one coder can implement it without touching a sibling's files. Stop splitting wh
 criteria are only meaningful together with a sibling's. Every leaf costs a tester, a coder, an
 auditor, a refactor review and two merges, so the floor matters as much as the ceiling.
 
+**Docs leaves.** When a leaf changes behaviour a user, developer or operator sees (a command, a
+flag, an endpoint, a config key, an error, a procedure), add a `docs` leaf for it, labelled
+`docs`, depending on the code leaf (`bd dep add <docs-leaf> <code-leaf>`). It costs one
+docs-writer and one merge; no tester, coder or audit. Several code leaves may share one docs leaf.
+A docs leaf never carries a source or test change.
+
 Decide the seams here, not at dispatch time: shared versus duplicated logic, which bead owns an
 artifact another depends on, file ownership, a naming or contract convention two beads share.
 Two beads at one file are serialised with `bd dep add`.
@@ -110,6 +116,16 @@ decided).
   from here.
   `Unverified:` claims nobody has read at source.
 - `bd dep add` for ordering, and for the approval gate below.
+
+**Docs leaf** (`-t task -l docs`, `--parent <epic or milestone>`): no `--acceptance` and no
+`Audit attack surface:`; nobody tests or audits it. Instead:
+
+- description: what the reader must be able to do or understand afterwards.
+- `--design`, under these headings:
+  `Doc:` the doc type (`readme`, `adr`, `runbook`, `contributing`, or a named other type), the
+  audience (user, developer or operator) and the target path.
+  `Covers:` the code leaves it documents, and pointers into the code they change.
+  `Owns:` the docs paths it may change. `Others:` docs paths it must not touch.
 
 ## Audit
 

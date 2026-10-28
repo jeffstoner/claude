@@ -15,6 +15,9 @@
 #   Policy: no issue tracker
 #   Policy: no refactor review            (read by the orchestrator, not by a hook)
 #   Test-paths: src/**/*_test.rs          (may repeat; extends the tester's allowed set)
+#   Docs-paths: guides/**/*.md            (may repeat; extends the docs-writer's allowed set)
+#   Doc-template: <type> <path>           (read by the docs-writer, not by a hook)
+#   Glossary: <path>                      (read by the docs-writer, not by a hook)
 
 # ---- hook responses ---------------------------------------------------------
 # PreToolUse decisions. Each prints one JSON object and exits 0.
@@ -76,6 +79,14 @@ policy_test_paths() {
   local f
   for f in $(policy_files); do
     grep -iE "^[[:space:]]*Test-paths:[[:space:]]*" "$f" 2>/dev/null | sed -E 's/^[[:space:]]*Test-paths:[[:space:]]*//'
+  done
+  return 0
+}
+# Docs-paths: globs declared by the project, one per line.
+policy_docs_paths() {
+  local f
+  for f in $(policy_files); do
+    grep -iE "^[[:space:]]*Docs-paths:[[:space:]]*" "$f" 2>/dev/null | sed -E 's/^[[:space:]]*Docs-paths:[[:space:]]*//'
   done
   return 0
 }
